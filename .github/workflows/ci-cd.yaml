@@ -35,4 +35,4 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
-        ssh -o StrictHostKeyChecking=no ec2-user@your-ec2-ip 'bash -s' < ./deploy/deploy.sh
+        ssh -o StrictHostKeyChecking=no ec2-user@3.208.173.73 'bash -s' < ./deploy/deploy.sh
