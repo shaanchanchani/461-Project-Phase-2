@@ -10,6 +10,7 @@
   "scripts": {
     "test": "echo \"Running tests...\" && jest --detectOpenHandles --verbose --coverage",
     "cli": "ts-node cli.ts"
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": "",
