@@ -9,3 +9,5 @@ coverage
 
 #ignor .env
 .env
+
+dist
