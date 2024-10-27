@@ -59,7 +59,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main' # Only deploy on main branch
+    # if: github.ref == 'refs/heads/main' # Only deploy on main branch
     runs-on: ubuntu-latest
 
     steps:
