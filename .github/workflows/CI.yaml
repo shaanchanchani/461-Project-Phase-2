@@ -1,0 +1,56 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+      - CICD-tests
+  pull_request:
+    branches:
+      - main
+      - CICD-tests
+
+jobs:
+  build:    # First job name
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the repository
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+      # Add Node.js setup
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'  # Specify Node.js version
+        cache: 'npm'    # Enables npm caching
+
+    # Install dependencies 
+    - name: Install dependencies
+      run: npm install
+
+    # Run linting (*linting needs to be fixed not working properly)
+    # - name: Run lint #need to install eslint dependency for this to run
+    #   run: npm run lint
+    - name: Create log directory
+      run: |
+        touch jest-output.log 
+      
+    # Set environment variables
+    - name: Set environment variables
+      # env:
+      # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} potentiall use later test token for now
+      run: |
+        echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
+        echo "LOG_LEVEL=0" >> $GITHUB_ENV
+        echo "GITHUB_TOKEN=TESTaxad" >> $GITHUB_ENV 
+        
+        # Create log file directory
+        touch jest-output.log
+    # Run tests
+    - name: Run tests
+      run: npm test
+    
+    - name: Build
+      run: npm run build
