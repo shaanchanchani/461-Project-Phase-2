@@ -30,21 +30,24 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    # Run linting
+    # Run linting (*linting needs to be fixed not working properly)
     # - name: Run lint #need to install eslint dependency for this to run
     #   run: npm run lint
     - name: Create log directory
       run: |
         touch jest-output.log 
       
+    # Set environment variables
     - name: Set environment variables
       env:
-        LOG_FILE: jest-output.log
-        LOG_LEVEL: 0
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
         echo "LOG_LEVEL=0" >> $GITHUB_ENV
-        echo "GITHUB_TOKEN=TESTaxax23" >> $GITHUB_ENV
+        echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+        
+        # Create log file directory
+        touch jest-output.log
     # Run tests
     - name: Run tests
       run: npm test
@@ -52,24 +55,68 @@ jobs:
     - name: Build
       run: npm run build
 
-  # deploy:    
-  #   needs: build    
-  #   runs-on: ubuntu-latest
-  #   if: github.ref == 'refs/heads/main' # Only deploy when the branch is main
+  deploy:    
+    needs: build    
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' # Only deploy when the branch is main
 
-  #   steps:
-  #   - name: Checkout code
-  #     uses: actions/checkout@v2
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-  #   - name: Configure AWS credentials    
-  #     uses: aws-actions/configure-aws-credentials@v1
-  #     with:
-  #       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #       aws-region: us-east-1
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'
+        cache: 'npm'
 
-  #   - name: Deploy to EC2 # need to fix this doesn't work properly
-  #     run: |
-  #       echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key
-  #       chmod 600 deploy_key
-  #       ssh -i deploy_key -o StrictHostKeyChecking=no ec2-user@3.208.173.73 'bash -s' < ./deploy/deploy.sh 
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build
+      run: npm run build
+
+    - name: Configure AWS credentials    
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Deploy to EC2
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+      run: |
+        # Create SSH directory and key file
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        
+        # Add EC2 host to known hosts
+        ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
+        # Create deployment script
+        echo "#!/bin/bash
+        pm2 stop all || true
+        rm -rf ~/app
+        mkdir -p ~/app" > deploy.sh
+        
+        # Copy files to EC2
+        scp -i ~/.ssh/deploy_key -r \
+          dist \
+          package.json \
+          package-lock.json \
+          logs \
+          .env \
+          deploy.sh \
+          $EC2_USERNAME@$EC2_HOST:~/app/
+        
+        # # Execute deployment commands on EC2 commented out for now need to figure out a way to test this
+        # ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
+        #   cd ~/app && \
+        #   chmod +x deploy.sh && \
+        #   ./deploy.sh && \
+        #   npm install --production && \
+        #   pm2 start dist/index.js --name app || pm2 restart app"
