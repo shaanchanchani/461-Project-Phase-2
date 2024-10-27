@@ -1,4 +1,4 @@
-name: CI/CD PIPELINE
+name: CI/CD Pipeline
 
 on:
   push:
@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - CICD-tests
+  workflow_dispatch:
+
 
 jobs:
   build:    # First job name
