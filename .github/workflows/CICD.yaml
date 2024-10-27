@@ -58,7 +58,7 @@ jobs:
       run: npm run build
 
   deploy:
-    needs: test  # This ensures deploy only runs after successful test
+    needs: build
     if: github.ref == 'refs/heads/main' # Only deploy on main branch
     runs-on: ubuntu-latest
 
