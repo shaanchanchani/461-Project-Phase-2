@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - CICD-tests
 
 jobs:
   build:    # First job name
@@ -21,7 +22,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '20.x'  
+        node-version: '20.x'  # Specify Node.js version
         cache: 'npm'    # Enables npm caching
 
     # Install dependencies 
@@ -29,12 +30,15 @@ jobs:
       run: npm install
 
     # Run linting
-    - name: Run lint #need to install eslint dependency for this to run
-      run: npm run lint
+    # - name: Run lint #need to install eslint dependency for this to run
+    #   run: npm run lint
 
     # Run tests
     - name: Run tests
       run: npm test
+    
+    -name: Build
+     run: npm run build
 
   # deploy:    
   #   needs: build    
