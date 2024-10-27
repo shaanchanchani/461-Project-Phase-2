@@ -33,7 +33,17 @@ jobs:
     # Run linting
     # - name: Run lint #need to install eslint dependency for this to run
     #   run: npm run lint
-
+    - name: Create log directory
+      run: |
+        touch jest-output.log 
+      
+    - name: Set environment variables
+      env:
+        LOG_FILE: jest-output.log
+        LOG_LEVEL: 0
+      run: |
+        echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
+        echo "LOG_LEVEL=0" >> $GITHUB_ENV
     # Run tests
     - name: Run tests
       run: npm test
