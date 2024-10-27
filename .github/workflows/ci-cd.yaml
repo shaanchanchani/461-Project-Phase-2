@@ -44,6 +44,7 @@ jobs:
       run: |
         echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
         echo "LOG_LEVEL=0" >> $GITHUB_ENV
+        echo "GITHUB_TOKEN=TESTaxax23" >> $GITHUB_ENV
     # Run tests
     - name: Run tests
       run: npm test
