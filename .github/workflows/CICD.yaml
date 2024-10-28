@@ -98,6 +98,8 @@ jobs:
         
         # Add EC2 host to known hosts
         ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
+        ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "mkdir -p ~/app"
         
         # Copy files to EC2 (excluding .env)
         scp -i ~/.ssh/deploy_key -r \
