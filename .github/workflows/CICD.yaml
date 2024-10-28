@@ -89,7 +89,7 @@ jobs:
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         EC2_USERNAME: ec2-user
-        EC2_HOST: "3.208.173.73"  # Hardcoded IP for school project
+        EC2_HOST: "3.208.173.73" 
       run: |
         # Create SSH directory and key file
         mkdir -p ~/.ssh
@@ -112,9 +112,9 @@ jobs:
           deploy/deploy.sh \
           $EC2_USERNAME@$EC2_HOST:~/app/
         
-        # Execute deployment
-        ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
-          cd ~/app && \
-          chmod +x deploy.sh && \
-          ./deploy.sh"
+        # # Execute deployment
+        # ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
+        #   cd ~/app && \
+        #   chmod +x deploy.sh && \
+        #   ./deploy.sh"
           
