@@ -100,13 +100,16 @@ jobs:
         ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
 
         ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "mkdir -p ~/app"
+
+        # Make deploy.sh executable before copying
+        chmod +x deploy/deploy.sh
         
-        # Copy files to EC2 (excluding .env)
+        # Copy files to EC2 (note the updated path to deploy.sh)
         scp -i ~/.ssh/deploy_key -r \
           dist \
           package.json \
           package-lock.json \
-          deploy.sh \
+          deploy/deploy.sh \
           $EC2_USERNAME@$EC2_HOST:~/app/
         
         # Execute deployment
