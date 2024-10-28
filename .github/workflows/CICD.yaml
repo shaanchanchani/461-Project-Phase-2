@@ -112,3 +112,4 @@ jobs:
           cd ~/app && \
           chmod +x deploy.sh && \
           ./deploy.sh"
+          
