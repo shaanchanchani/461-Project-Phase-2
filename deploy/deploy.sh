@@ -28,7 +28,6 @@ fi
 echo "Installing dependencies..."
 npm install --production
 
-# Note: Removed .env file creation since we want to keep the existing one
 
 # Ensure correct permissions
 echo "Setting permissions..."
