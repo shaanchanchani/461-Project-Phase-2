@@ -35,7 +35,7 @@ chmod -R 755 $APP_DIR
 
 # Start application with PM2
 echo "Starting application..."
-pm2 start dist/index.js --name app \
+pm2 start dist/src/index.js --name app \
     --max-memory-restart 300M \
     --log logs/pm2.log
 
