@@ -105,6 +105,7 @@ jobs:
         # Copy files to EC2 (note the updated path to deploy.sh)
         scp -i ~/.ssh/deploy_key -r \
           dist \
+          run \
           package.json \
           package-lock.json \
           deploy/deploy.sh \
