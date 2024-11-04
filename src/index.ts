@@ -35,28 +35,27 @@
 //   // await testDynamoDBConnection();
 // // });
 
-
-//The main entry point of the application.
 import express from 'express';
-// import { log } from "./logger";
 
-// Create Express application
 const app = express();
 const port = 3000;
+
+// Enable JSON parsing for requests
+app.use(express.json());
 
 // Test endpoint
 app.get('/test', (req, res) => {
   res.send('test');
-//   log.info('Test endpoint was called');
 });
 
-// Health check endpoint (useful for monitoring)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
-//   log.info('Health check endpoint was called');
 });
 
 // Start server
 app.listen(port, () => {
-//   log.info(`Server running on port ${port}`);
+  console.log(`Server running on port ${port}`);
 });
+
+export default app;
