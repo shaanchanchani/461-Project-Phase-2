@@ -37,11 +37,26 @@
 
 
 //The main entry point of the application.
-import { cli } from "./cli";
+import express from 'express';
 import { log } from "./logger";
 
-//info log
-log.info("Starting application... info");
-//debug log
-// log.debug('Calling cli function... debug');
-cli();
+// Create Express application
+const app = express();
+const port = 3000;
+
+// Test endpoint
+app.get('/test', (req, res) => {
+  res.send('test');
+  log.info('Test endpoint was called');
+});
+
+// Health check endpoint (useful for monitoring)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+  log.info('Health check endpoint was called');
+});
+
+// Start server
+app.listen(port, () => {
+  log.info(`Server running on port ${port}`);
+});
