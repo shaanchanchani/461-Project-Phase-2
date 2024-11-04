@@ -84,28 +84,19 @@ jobs:
         # Add EC2 host to known hosts
         ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
 
-        # Create app directory
+        # Create app directory if it doesn't exist
         ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "mkdir -p ~/app"
 
-        # Make deploy.sh executable
-        chmod +x deploy/deploy.sh
-        
         # Copy files to EC2
         scp -i ~/.ssh/deploy_key -r \
           dist \
-          run \
-          src \
           package.json \
           package-lock.json \
           deploy/deploy.sh \
-          src/process.config.js \
           $EC2_USERNAME@$EC2_HOST:~/app/
         
-        # Execute deployment and start server
-        ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
-          cd ~/app && \
-          chmod +x run && \
-          npm install && \
-          npm install -g pm2 && \
-          ./run stop || true && \
-          ./run serve"
+        # Execute deployment
+        ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "cd ~/app && chmod +x deploy/deploy.sh && ./deploy/deploy.sh"
+
+        # Verify deployment
+        ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "curl http://localhost:3000/health || echo 'Health check failed'"
