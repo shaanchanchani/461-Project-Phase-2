@@ -43,11 +43,11 @@ pm2 start dist/src/index.js --name app \
 pm2 save
 
 # Setup PM2 to start on server reboot
-pm2 startup
+# pm2 startup
 
 echo "Deployment completed successfully!"
 
 # Print application status
 echo "Application Status:"
 pm2 list
-pm2 logs app --lines 10
+# pm2 logs app --lines 10
