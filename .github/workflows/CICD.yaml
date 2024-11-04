@@ -1,4 +1,75 @@
-- name: Deploy to EC2
+name: CI/CD Pipeline
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+jobs:
+  build:    # First job name
+    runs-on: ubuntu-latest
+    steps:
+    # Checkout the repository
+    - name: Checkout code
+      uses: actions/checkout@v3
+      # Add Node.js setup
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'  # Specify Node.js version
+        cache: 'npm'    # Enables npm caching
+    # Install dependencies 
+    - name: Install dependencies
+      run: npm install
+    # Run linting (*linting needs to be fixed not working properly)
+    # - name: Run lint #need to install eslint dependency for this to run
+    #   run: npm run lint
+    - name: Create log directory
+      run: |
+        touch jest-output.log 
+      
+    # Set environment variables
+    - name: Set environment variables
+      # env:
+      # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} potentiall use later test token for now
+      run: |
+        echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
+        echo "LOG_LEVEL=0" >> $GITHUB_ENV
+        echo "GITHUB_TOKEN=TESTaxad" >> $GITHUB_ENV 
+        
+        # Create log file directory
+        touch jest-output.log
+    # Run tests
+    - name: Run tests
+      run: npm test
+    
+    - name: Build
+      run: npm run build
+  deploy:
+    needs: build
+    # if: github.ref == 'refs/heads/main' # Only deploy on main branch
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    - name: Install dependencies
+      run: npm install
+    - name: Build
+      run: npm run build
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: "us-east-1"
+    - name: Deploy to EC2
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         EC2_USERNAME: ec2-user
