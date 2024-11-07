@@ -40,7 +40,6 @@ jobs:
     - name: Build
       run: npm run build
 
-    # Upload build artifacts to make them available to deploy job
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
@@ -53,7 +52,7 @@ jobs:
           src
           run
 
-deploy:
+  deploy:
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -67,8 +66,7 @@ deploy:
         cat << EOF > .env
         LOG_FILE=jest-output.log 
         LOG_LEVEL=0
-        GITHUB_TOKEN=TESTaxad" 
-        # Add other environment variables here
+        GITHUB_TOKEN=TESTaxad
         EOF
 
     - name: Configure AWS credentials
@@ -84,17 +82,11 @@ deploy:
         EC2_USERNAME: ec2-user
         EC2_HOST: "3.208.173.73" 
       run: |
-        echo "Starting deployment process..."
-        
-        # Setup SSH
-        echo "Setting up SSH..."
         mkdir -p ~/.ssh
         echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
         ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
         
-        # Copy files including .env
-        echo "Copying files to EC2..."
         scp -i ~/.ssh/deploy_key -r \
           dist \
           run \
@@ -105,8 +97,6 @@ deploy:
           .env \
           $EC2_USERNAME@$EC2_HOST:~/app/
         
-        # Execute deployment
-        echo "Executing deployment script..."
         ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
           cd ~/app && \
           chmod +x deploy.sh && \
