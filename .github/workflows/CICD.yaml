@@ -7,90 +7,94 @@ on:
     branches:
       - main
   workflow_dispatch:
+
 jobs:
-  build:    # First job name
-    runs-on: ubuntu-latest
-    steps:
-    # Checkout the repository
-    - name: Checkout code
-      uses: actions/checkout@v3
-      # Add Node.js setup
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20.x'  # Specify Node.js version
-        cache: 'npm'    # Enables npm caching
-    # Install dependencies 
-    - name: Install dependencies
-      run: npm install
-    # Run linting (*linting needs to be fixed not working properly)
-    # - name: Run lint #need to install eslint dependency for this to run
-    #   run: npm run lint
-    - name: Create log directory
-      run: |
-        touch jest-output.log 
-      
-    # Set environment variables
-    - name: Set environment variables
-      # env:
-      # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} potentiall use later test token for now
-      run: |
-        echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
-        echo "LOG_LEVEL=0" >> $GITHUB_ENV
-        echo "GITHUB_TOKEN=TESTaxad" >> $GITHUB_ENV 
-        
-        # Create log file directory
-        touch jest-output.log
-    # Run tests
-    - name: Run tests
-      run: npm test
-    
-    - name: Build
-      run: npm run build
-  deploy:
-    needs: build
-    # if: github.ref == 'refs/heads/main' # Only deploy on main branch
+  build:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '20.x'
         cache: 'npm'
+
     - name: Install dependencies
       run: npm install
+
+    - name: Create log directory
+      run: touch jest-output.log 
+      
+    - name: Set environment variables
+      run: |
+        echo "LOG_FILE=jest-output.log" >> $GITHUB_ENV
+        echo "LOG_LEVEL=0" >> $GITHUB_ENV
+        echo "GITHUB_TOKEN=TESTaxad" >> $GITHUB_ENV 
+        touch jest-output.log
+
+    - name: Run tests
+      run: npm test
+    
     - name: Build
       run: npm run build
+
+    # Upload build artifacts to make them available to deploy job
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: |
+          dist
+          deploy/deploy.sh
+          package.json
+          package-lock.json
+          src
+          run
+
+deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifacts
+
+    - name: Create .env file
+      run: |
+        cat << EOF > .env
+        LOG_FILE=jest-output.log 
+        LOG_LEVEL=0
+        GITHUB_TOKEN=TESTaxad" 
+        # Add other environment variables here
+        EOF
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: "us-east-1"
+
     - name: Deploy to EC2
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         EC2_USERNAME: ec2-user
         EC2_HOST: "3.208.173.73" 
       run: |
-        # Debug: List files to see where deploy.sh is
-        ls -la
-        ls -la deploy/
+        echo "Starting deployment process..."
         
-        # Create SSH directory and key file
+        # Setup SSH
+        echo "Setting up SSH..."
         mkdir -p ~/.ssh
         echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        
-        # Add EC2 host to known hosts
         ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
-
-        # Make deploy.sh executable before copying
-        chmod +x deploy/deploy.sh
         
-        # Copy files to EC2
+        # Copy files including .env
+        echo "Copying files to EC2..."
         scp -i ~/.ssh/deploy_key -r \
           dist \
           run \
@@ -98,9 +102,11 @@ jobs:
           package.json \
           package-lock.json \
           deploy/deploy.sh \
+          .env \
           $EC2_USERNAME@$EC2_HOST:~/app/
         
         # Execute deployment
+        echo "Executing deployment script..."
         ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
           cd ~/app && \
           chmod +x deploy.sh && \
