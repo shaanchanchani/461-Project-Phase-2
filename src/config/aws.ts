@@ -1,6 +1,6 @@
 // src/config/aws.ts
 
-import { DynamoDB } from 'aws-sdk';
+import * as DynamoDB from 'aws-sdk/clients/dynamodb';
 import { log } from '../logger';
 
 export const TABLE_NAME = 'PackageRegistry';
