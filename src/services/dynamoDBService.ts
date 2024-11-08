@@ -1,5 +1,5 @@
 // src/services/dynamoDBService.ts
-
+import * as AWS from 'aws-sdk';
 import { DynamoDB } from 'aws-sdk';
 import { Package, PackageID, DB } from '../types';
 import { createHash } from 'crypto';
