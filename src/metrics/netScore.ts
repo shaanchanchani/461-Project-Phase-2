@@ -1,3 +1,4 @@
+//src/metrics/netScore.ts
 import { getGithubInfo, RepoDetails } from "../apiProcess/gitApiProcess";
 import { calculateRampUpTime } from "./rampUpTime";
 import { calculateResponsiveness } from "./responsiveness";

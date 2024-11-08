@@ -1,11 +1,11 @@
 // src/routes.ts
-import express from 'express';
-import { PackageController } from './controllers/packageController';
+import express, { Router } from 'express';
+import { packageController } from './controllers/packageController';
 import { RatingController } from './controllers/ratingController';
 import { SearchController } from './controllers/searchController';
 import { log } from './logger';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 // Logging middleware
 router.use((req, res, next) => {
@@ -14,13 +14,13 @@ router.use((req, res, next) => {
 });
 
 // BASELINE Endpoints
-router.post('/packages', SearchController.listPackages);              // Get packages from registry
-router.delete('/reset', PackageController.resetRegistry);             // Reset the registry
-router.get('/package/:id', PackageController.getPackage);            // Get package by ID
-router.put('/package/:id', PackageController.updatePackage);         // Update package
-router.post('/package', PackageController.createPackage);            // Create new package
-router.get('/package/:id/rate', RatingController.getRating);         // Get package rating
-router.get('/package/:id/cost', RatingController.getCost);           // Get package cost
-router.post('/package/byRegEx', SearchController.searchByRegEx);     // Search by regex
+router.post('/packages', SearchController.listPackages);
+router.delete('/reset', packageController.resetRegistry);
+router.post('/package/byRegEx', SearchController.searchByRegEx);
+router.get('/package/:id/rate', RatingController.getRating);
+router.get('/package/:id/cost', RatingController.getCost);
+router.get('/package/:id', packageController.getPackage);
+router.put('/package/:id', packageController.updatePackage);
+router.post('/package', packageController.createPackage);
 
 export default router;

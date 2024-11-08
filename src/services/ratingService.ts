@@ -38,7 +38,11 @@ export class RatingService {
                 LicenseScore: scores.License,
                 LicenseScoreLatency: scores.License_Latency,
                 NetScore: scores.NetScore,
-                NetScoreLatency: scores.NetScore_Latency
+                NetScoreLatency: scores.NetScore_Latency,
+                GoodPinningPractice: -1, 
+                PullRequest: -1, 
+                GoodPinningPracticeLatency: -1,
+                PullRequestLatency: -1
             };
         } catch (error) {
             log.error('Error calculating rating:', error);
