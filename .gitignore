@@ -5,9 +5,11 @@ node_modules
 .env
 
 #ignore coverage/ generated after Jest
-coverage
+coverage/
 
 #ignor .env
 .env
 
-dist
+dist/
+
+test-results.json
