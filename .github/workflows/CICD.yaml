@@ -96,6 +96,7 @@ jobs:
         # Execute deploy script with environment sourced
         ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
           cd ~/app && \
+          touch jest-output.log && \
           chmod +x deploy.sh && \
           source .env && \
           ./deploy.sh"
