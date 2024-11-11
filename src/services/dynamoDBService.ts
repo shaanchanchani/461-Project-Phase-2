@@ -1,172 +1,144 @@
 // src/services/dynamoDBService.ts
-import * as AWS from 'aws-sdk';
-import { DynamoDB } from 'aws-sdk';
-import { Package, PackageID, DB } from '../types';
+import { 
+    CreateTableCommand,
+    CreateTableCommandInput,
+    UpdateContinuousBackupsCommand,
+    waitUntilTableExists,
+    DynamoDBClient,
+    ScalarAttributeType,
+    KeyType,
+    BillingMode
+} from "@aws-sdk/client-dynamodb";
+import {
+    DynamoDBDocumentClient,
+    PutCommand,
+    QueryCommand,
+    GetCommand,
+    UpdateCommand,
+    DeleteCommand
+} from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
+import { Package, PackageID, DB } from '../types';
 import { log } from '../logger';
-import { configureAWS, TABLE_NAME } from '../config/aws';
+import { TABLE_NAME, createDynamoDBClients } from '../config/aws';
 
 export class DynamoDBService {
-    private dynamoDB: DynamoDB.DocumentClient;
+    private readonly docClient: DynamoDBDocumentClient;
+    private readonly baseClient: DynamoDBClient;
 
     constructor() {
-        this.dynamoDB = configureAWS();
+        const { baseClient, documentClient } = createDynamoDBClients();
+        this.baseClient = baseClient;
+        this.docClient = documentClient;
     }
 
-    /**
-     * Creates the DynamoDB table in production
-     */
-    async createTable(): Promise<void> {
-        const dynamoDB = new DynamoDB({ region: process.env.AWS_REGION });
-        
-        const params: DynamoDB.CreateTableInput = {
-            TableName: TABLE_NAME,
-            AttributeDefinitions: [
-                { AttributeName: 'PK', AttributeType: 'S' },
-                { AttributeName: 'SK', AttributeType: 'S' },
-                { AttributeName: 'GSI1PK', AttributeType: 'S' },
-                { AttributeName: 'GSI1SK', AttributeType: 'S' }
-            ],
-            KeySchema: [
-                { AttributeName: 'PK', KeyType: 'HASH' },
-                { AttributeName: 'SK', KeyType: 'RANGE' }
-            ],
-            GlobalSecondaryIndexes: [
-                {
-                    IndexName: 'GSI1',
-                    KeySchema: [
-                        { AttributeName: 'GSI1PK', KeyType: 'HASH' },
-                        { AttributeName: 'GSI1SK', KeyType: 'RANGE' }
-                    ],
-                    Projection: {
-                        ProjectionType: 'ALL'
-                    },
-                    ProvisionedThroughput: {
-                        ReadCapacityUnits: 5,
-                        WriteCapacityUnits: 5
-                    }
-                }
-            ],
-            BillingMode: 'PAY_PER_REQUEST', // Better for production - no need to manage capacity
-            Tags: [
-                {
-                    Key: 'Environment',
-                    Value: 'Production'
-                },
-                {
-                    Key: 'Project',
-                    Value: 'PackageRegistry'
-                }
-            ]
-        };
-
-        try {
-            await dynamoDB.createTable(params).promise();
-            log.info(`Created table ${TABLE_NAME}`);
-            
-            // Wait for table to be active
-            await dynamoDB.waitFor('tableExists', { TableName: TABLE_NAME }).promise();
-            
-            // Enable point-in-time recovery for production
-            await dynamoDB.updateContinuousBackups({
-                TableName: TABLE_NAME,
-                PointInTimeRecoverySpecification: {
-                    PointInTimeRecoveryEnabled: true
-                }
-            }).promise();
-            
-            log.info('Enabled point-in-time recovery for table');
-        } catch (error: any) {
-            if (error.code === 'ResourceInUseException') {
-                log.info(`Table ${TABLE_NAME} already exists`);
-            } else {
-                log.error('Error creating table:', error);
-                throw error;
-            }
-        }
-    }
-
-    /**
-     * Generates a deterministic package ID
-     */
     private generatePackageID(name: string, version: string): PackageID {
         const hash = createHash('sha256');
         hash.update(`${name}-${version}`);
         return hash.digest('hex').substring(0, 16);
     }
 
-    /**
-     * Creates a new package with error handling and retries
-     */
+    async createTable(): Promise<void> {
+        const params: CreateTableCommandInput = {
+            TableName: TABLE_NAME,
+            AttributeDefinitions: [
+                { AttributeName: 'PK', AttributeType: ScalarAttributeType.S },
+                { AttributeName: 'SK', AttributeType: ScalarAttributeType.S }
+            ],
+            KeySchema: [
+                { AttributeName: 'PK', KeyType: KeyType.HASH },
+                { AttributeName: 'SK', KeyType: KeyType.RANGE }
+            ],
+            BillingMode: BillingMode.PAY_PER_REQUEST
+        };
+
+        try {
+            await this.baseClient.send(new CreateTableCommand(params));
+            log.info(`Created table ${TABLE_NAME}`);
+
+            await waitUntilTableExists(
+                { client: this.baseClient, maxWaitTime: 300 },
+                { TableName: TABLE_NAME }
+            );
+
+            await this.baseClient.send(new UpdateContinuousBackupsCommand({
+                TableName: TABLE_NAME,
+                PointInTimeRecoverySpecification: {
+                    PointInTimeRecoveryEnabled: true
+                }
+            }));
+
+            log.info('Table setup completed with point-in-time recovery enabled');
+        } catch (error) {
+            if (error instanceof Error && error.name === 'ResourceInUseException') {
+                log.info(`Table ${TABLE_NAME} already exists`);
+                return;
+            }
+            log.error('Error creating table:', error);
+            throw error;
+        }
+    }
+
     async createPackage(pkg: Package): Promise<Package> {
-        // Generate ID if not provided
         if (!pkg.metadata.ID) {
             pkg.metadata.ID = this.generatePackageID(pkg.metadata.Name, pkg.metadata.Version);
         }
 
-        const item: DB.DynamoPackageItem & { GSI1PK: string; GSI1SK: string } = {
+        const item: DB.DynamoPackageItem = {
             PK: `PKG#${pkg.metadata.ID}`,
             SK: `METADATA#${pkg.metadata.Version}`,
-            GSI1PK: `NAME#${pkg.metadata.Name}`,
-            GSI1SK: `VERSION#${pkg.metadata.Version}`,
             type: 'package',
             metadata: pkg.metadata,
             data: pkg.data,
             createdAt: new Date().toISOString()
         };
 
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                await this.dynamoDB.put({
-                    TableName: TABLE_NAME,
-                    Item: item,
-                    ConditionExpression: 'attribute_not_exists(PK)',
-                }).promise();
+        try {
+            await this.docClient.send(new PutCommand({
+                TableName: TABLE_NAME,
+                Item: item,
+                ConditionExpression: 'attribute_not_exists(PK)',
+            }));
 
-                log.info(`Successfully created package ${pkg.metadata.Name} v${pkg.metadata.Version}`);
-                return pkg;
-            } catch (error: any) {
-                if (error.code === 'ConditionalCheckFailedException') {
-                    throw new Error('Package already exists');
-                }
-                
-                if (error.code === 'ProvisionedThroughputExceededException' && retries > 1) {
-                    // Exponential backoff
-                    const delay = Math.pow(2, 4 - retries) * 100;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    retries--;
-                    continue;
-                }
-                
-                log.error('Error creating package:', error);
-                throw error;
+            log.info(`Created package ${pkg.metadata.Name} v${pkg.metadata.Version}`);
+            return pkg;
+        } catch (error) {
+            if (error instanceof Error && error.name === 'ConditionalCheckFailedException') {
+                throw new Error(`Package ${pkg.metadata.Name} v${pkg.metadata.Version} already exists`);
             }
+            log.error('Error creating package:', error);
+            throw error;
         }
-
-        throw new Error('Failed to create package after retries');
     }
 
-    /**
-     * Retrieves a package by ID with error handling
-     */
-    async getPackage(id: PackageID): Promise<Package | null> {
+    async getPackage(id: PackageID, version?: string): Promise<Package | null> {
         try {
-            const result = await this.dynamoDB.query({
-                TableName: TABLE_NAME,
-                KeyConditionExpression: 'PK = :pk',
-                ExpressionAttributeValues: {
-                    ':pk': `PKG#${id}`
-                }
-            }).promise();
-
-            if (!result.Items || result.Items.length === 0) {
-                return null;
+            if (version) {
+                const result = await this.docClient.send(new GetCommand({
+                    TableName: TABLE_NAME,
+                    Key: {
+                        PK: `PKG#${id}`,
+                        SK: `METADATA#${version}`
+                    }
+                }));
+                
+                return result.Item ? DB.toAPIPackage(result.Item as DB.DynamoPackageItem) : null;
             }
 
-            const item = result.Items[0] as DB.DynamoPackageItem;
-            return DB.toAPIPackage(item);
-        } catch (error: any) {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: TABLE_NAME,
+                KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+                ExpressionAttributeValues: {
+                    ':pk': `PKG#${id}`,
+                    ':sk': 'METADATA#'
+                },
+                Limit: 1,
+                ScanIndexForward: false // Get latest version
+            }));
+
+            if (!result.Items?.length) return null;
+            return DB.toAPIPackage(result.Items[0] as DB.DynamoPackageItem);
+        } catch (error) {
             log.error('Error retrieving package:', error);
             throw error;
         }
