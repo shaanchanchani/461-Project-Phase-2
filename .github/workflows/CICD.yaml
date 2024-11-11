@@ -82,7 +82,6 @@ jobs:
         chmod 600 ~/.ssh/deploy_key
         ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
         
-        # Copy files to EC2
         scp -i ~/.ssh/deploy_key -r \
           dist \
           run \
@@ -93,10 +92,11 @@ jobs:
           .env \
           $EC2_USERNAME@$EC2_HOST:~/app/
         
-        # Execute deploy script with environment sourced
         ssh -i ~/.ssh/deploy_key $EC2_USERNAME@$EC2_HOST "
           cd ~/app && \
-          touch jest-output.log && \
+          export LOG_FILE='jest-output.log' && \
+          export LOG_LEVEL='0' && \
+          touch \"\$LOG_FILE\" && \
           chmod +x deploy.sh && \
           source .env && \
           ./deploy.sh"
