@@ -13,3 +13,6 @@ coverage/
 dist/
 
 test-results.json
+
+docker/dynamodb/
+

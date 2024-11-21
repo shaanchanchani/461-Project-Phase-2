@@ -1,10 +1,11 @@
 // src/controllers/packageController.ts
-import { Request, Response, RequestHandler } from 'express';
+import { Response, NextFunction } from 'express';
 import { PackageService } from '../services/packageService';
+import { AuthenticatedRequest } from '../middleware/auth';
 import { log } from '../logger';
 
-class PackageController {
-    public createPackage: RequestHandler = async (req, res) => {
+export class PackageController {
+    public async createPackage(req: AuthenticatedRequest, res: Response) {
         try {
             const { Content, URL, JSProgram, debloat } = req.body.data || {};
             const metadata = req.body.metadata;
@@ -35,9 +36,9 @@ class PackageController {
 
             res.status(500).json({ error: 'Failed to create package' });
         }
-    };
+    }
 
-    public getPackage: RequestHandler = async (req, res) => {
+    public async getPackage(req: AuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
             const result = await PackageService.getPackage(id);
@@ -50,11 +51,11 @@ class PackageController {
                 return;
             }
             
-            res.status(500).json({ error: 'Failed to create package' });
+            res.status(500).json({ error: 'Failed to retrieve package' });
         }
-    };
+    }
 
-    public updatePackage: RequestHandler = async (req, res) => {
+    public async updatePackage(req: AuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
             const packageData = req.body;
@@ -64,9 +65,9 @@ class PackageController {
             log.error('Error updating package:', error);
             res.status(500).json({ error: 'Failed to update package' });
         }
-    };
+    }
 
-    public resetRegistry: RequestHandler = async (_req, res) => {
+    public async resetRegistry(req: AuthenticatedRequest, res: Response, next: NextFunction) {
         try {
             await PackageService.resetRegistry();
             res.status(200).json({ message: 'Registry reset successful' });
@@ -74,7 +75,7 @@ class PackageController {
             log.error('Error resetting registry:', error);
             res.status(500).json({ error: 'Failed to reset registry' });
         }
-    };
+    }
 }
 
 export const packageController = new PackageController();
