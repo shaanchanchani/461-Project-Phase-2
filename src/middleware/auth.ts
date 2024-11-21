@@ -3,6 +3,7 @@ import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { AuthenticationRequest, User } from '../types';
 import jwt from 'jsonwebtoken';
 import { log } from '../logger';
+import dotenv from 'dotenv';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -55,7 +56,7 @@ export class AuthController {
 
             // Validate credentials
             if (authRequest.User.name === 'admin' && 
-                authRequest.Secret.password === 'correcthorsebatterystaple123(!__+@**(A\'"`;DROP TABLE packages;') {
+                authRequest.Secret.password === process.env.ADMIN_PW) {
                 
                 // Create JWT token
                 const token = jwt.sign(
