@@ -16,7 +16,7 @@ import {
     GetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
-import { Package, PackageID, DB } from '../types';
+import { Package, PackageID, DB, PackageRating } from '../types';
 import { log } from '../logger';
 
 const TABLE_NAME = process.env.DYNAMODB_TABLE || 'packages';
@@ -178,6 +178,28 @@ export class DynamoDBService {
             return DB.toAPIPackage(result.Items[0] as DB.DynamoPackageItem);
         } catch (error) {
             log.error('Error retrieving package:', error);
+            throw error;
+        }
+    }
+
+    async updatePackageRating(id: PackageID, rating: PackageRating): Promise<void> {
+        try {
+            const item: DB.DynamoRatingItem = {
+                PK: `PKG#${id}`,
+                SK: 'RATING',
+                type: 'rating',
+                rating,
+                updatedAt: new Date().toISOString()
+            };
+
+            await this.docClient.send(new PutCommand({
+                TableName: TABLE_NAME,
+                Item: item
+            }));
+
+            log.info(`Updated rating for package ${id}`);
+        } catch (error) {
+            log.error('Error updating package rating:', error);
             throw error;
         }
     }

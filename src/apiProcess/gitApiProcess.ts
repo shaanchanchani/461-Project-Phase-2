@@ -409,15 +409,55 @@ async function _getLicenseFromPackageJson(
   }
 }
 
+// Custom error types for different GitHub API errors
+export class GitHubRateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubRateLimitError';
+  }
+}
+
+export class GitHubAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubAuthError';
+  }
+}
+
+export class GitHubNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitHubNotFoundError';
+  }
+}
+
+export class GitHubClientError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'GitHubClientError';
+  }
+}
+
+export class GitHubServerError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'GitHubServerError';
+  }
+}
+
 /*
   Helper Function: handleError
   Description: This function handles errors and logs appropriate messages
   @params: error: any - the error object
   @params: context: string - additional context information
 */
-function _handleError(error: any, context: string): void {
+function _handleError(error: any, context: string): never {
   log.info(`Error occured in context: ${context}`);
   log.info(`Processing error...`);
+  
+  let errorMessage = '';
+  let customError: Error;
+  
   if (axios.isAxiosError(error)) {
     if (error.response) {
       const status = error.response.status;
@@ -425,37 +465,41 @@ function _handleError(error: any, context: string): void {
         (status == 403 || status == 429) &&
         error.response.headers["x-ratelimit-remaining"] === "0"
       ) {
-        console.error(`Error: Rate limit exceeded.`);
+        errorMessage = `Rate limit exceeded.`;
+        customError = new GitHubRateLimitError(errorMessage);
       } else if (status == 401) {
-        console.error("Error: Unauthorized. Invalid or missing GitHub Token.");
+        errorMessage = "Unauthorized. Invalid or missing GitHub Token.";
+        customError = new GitHubAuthError(errorMessage);
       } else if (status == 403) {
-        console.error(
-          "Error: Forbidden. You do not have permission to access this resource.",
-        );
+        errorMessage = "Forbidden. You do not have permission to access this resource.";
+        customError = new GitHubAuthError(errorMessage);
       } else if (status == 404) {
-        console.error("Error: Not Found. Invalid URL.");
+        errorMessage = "Not Found. Invalid URL.";
+        customError = new GitHubNotFoundError(errorMessage);
       } else if (status >= 400 && status < 500) {
-        console.error(`Client error: ${status} - ${error.response.statusText}`);
+        errorMessage = `Client error: ${status} - ${error.response.statusText}`;
+        customError = new GitHubClientError(errorMessage, status);
       } else if (status >= 500 && status < 600) {
-        console.error(`Server error: ${status} - ${error.response.statusText}`);
+        errorMessage = `Server error: ${status} - ${error.response.statusText}`;
+        customError = new GitHubServerError(errorMessage, status);
       } else {
-        console.error(`HTTP error: ${status} - ${error.response.statusText}`);
+        errorMessage = `HTTP error: ${status} - ${error.response.statusText}`;
+        customError = new Error(errorMessage);
       }
     } else if (error.request) {
-      // Request was made but no response was received
-      console.error("No response received:", error.request);
+      errorMessage = `No response received: ${error.request}`;
+      customError = new Error(errorMessage);
     } else {
-      // Something happened in setting up the request
-      console.error("Error in request setup:", error.message);
+      errorMessage = `Error in request setup: ${error.message}`;
+      customError = new Error(errorMessage);
     }
   } else {
-    // Non-Axios error
-    console.error("Unexpected error:", error);
+    errorMessage = `Unexpected error: ${error}`;
+    customError = new Error(errorMessage);
   }
 
-  console.error("Context:", context);
-  log.info(`Exiting Error Handling...`);
-  process.exit(1); // Exit the process with a return code 1
+  log.error(`${errorMessage} (Context: ${context})`);
+  throw customError;
 }
 
 export {

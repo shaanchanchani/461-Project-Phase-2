@@ -1,6 +1,13 @@
 import axios, { AxiosError, isAxiosError, AxiosResponse } from "axios";
 import type { AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
-import { _handleError } from "../src/apiProcess/gitApiProcess";
+import { 
+  _handleError, 
+  GitHubRateLimitError, 
+  GitHubAuthError, 
+  GitHubNotFoundError,
+  GitHubClientError,
+  GitHubServerError
+} from "../src/apiProcess/gitApiProcess";
 
 describe("_handleError", () => {
   beforeEach(() => {
@@ -39,21 +46,9 @@ describe("_handleError", () => {
       } as AxiosResponse,
     );
     const context = "Rate limit test";
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`process.exit: ${code}`);
-    });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await expect(() => _handleError(error, context)).toThrow("process.exit: 1");
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Rate limit exceeded"),
-    );
-
-    exitSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    expect(() => _handleError(error, context)).toThrow(GitHubRateLimitError);
+    expect(() => _handleError(error, context)).toThrow("Rate limit exceeded.");
   });
 
   it("should handle invalid or missing GitHUb Token error (401)", async () => {
@@ -78,28 +73,14 @@ describe("_handleError", () => {
       } as AxiosResponse,
     );
     const context = "Invalid token test";
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`process.exit: ${code}`);
-    });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await expect(() => _handleError(error, context)).toThrow("process.exit: 1");
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "Error: Unauthorized. Invalid or missing GitHub Token.",
-      ),
-    );
-
-    exitSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    expect(() => _handleError(error, context)).toThrow(GitHubAuthError);
+    expect(() => _handleError(error, context)).toThrow("Unauthorized. Invalid or missing GitHub Token.");
   });
 
   it("should handle invalid URL (404)", async () => {
     const error: AxiosError = new AxiosError(
-      "invalid URL",
+      "Not Found",
       "404",
       undefined,
       {
@@ -109,36 +90,24 @@ describe("_handleError", () => {
       } as AxiosRequestConfig,
       {
         data: {
-          message: "invalid URL",
+          message: "Not Found",
         },
         status: 404,
-        statusText: "invalid URL",
+        statusText: "Not Found",
         headers: {},
         config: {} as InternalAxiosRequestConfig,
         request: {},
       } as AxiosResponse,
     );
     const context = "Invalid URL Test";
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`process.exit: ${code}`);
-    });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await expect(() => _handleError(error, context)).toThrow("process.exit: 1");
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Error: Not Found. Invalid URL."),
-    );
-
-    exitSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    expect(() => _handleError(error, context)).toThrow(GitHubNotFoundError);
+    expect(() => _handleError(error, context)).toThrow("Not Found. Invalid URL.");
   });
 
   it("should handle between 400 and 500 (406)", async () => {
     const error: AxiosError = new AxiosError(
-      "Clien Error",
+      "Client Error",
       "406",
       undefined,
       {
@@ -158,21 +127,9 @@ describe("_handleError", () => {
       } as AxiosResponse,
     );
     const context = "Client Error Test";
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`process.exit: ${code}`);
-    });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await expect(() => _handleError(error, context)).toThrow("process.exit: 1");
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("406"),
-    );
-
-    exitSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    expect(() => _handleError(error, context)).toThrow(GitHubClientError);
+    expect(() => _handleError(error, context)).toThrow(/Client error: 406/);
   });
 
   it("should handle between 500 and 600 (506)", async () => {
@@ -197,37 +154,16 @@ describe("_handleError", () => {
       } as AxiosResponse,
     );
     const context = "Server Error Test";
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`process.exit: ${code}`);
-    });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await expect(() => _handleError(error, context)).toThrow("process.exit: 1");
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("506"),
-    );
-
-    exitSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    expect(() => _handleError(error, context)).toThrow(GitHubServerError);
+    expect(() => _handleError(error, context)).toThrow(/Server error: 506/);
   });
 
   it("should handle unknown error", async () => {
     const error = new Error("Unknown Error");
     const context = "Unknown Error Test";
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation((code) => {
-      throw new Error(`process.exit: ${code}`);
-    });
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
 
-    await expect(() => _handleError(error, context)).toThrow("process.exit: 1");
-    expect(exitSpy).toHaveBeenCalledWith(1);
-
-    exitSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    expect(() => _handleError(error, context)).toThrow(Error);
+    expect(() => _handleError(error, context)).toThrow(/Unexpected error:/);
   });
 });
