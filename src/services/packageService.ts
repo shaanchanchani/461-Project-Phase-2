@@ -1,7 +1,11 @@
 // src/services/packageService.ts
 import { log } from '../logger';
-import type { Package, PackageData, PackageMetadata } from '../types';
+import type { Package, PackageData, PackageMetadata, PackageRating, ProcessedPackage } from '../types';
 import { DynamoDBService, dynamoDBService } from './dynamoDBService';
+import { PackageDownloadService } from './packageDownloadService';
+import { checkUrlType, processUrl, UrlType } from '../utils/urlUtils';
+import { v4 as uuidv4 } from 'uuid';
+import { GetNetScore } from '../metrics/netScore';
 
 export class PackageService {
     private db: DynamoDBService;
@@ -10,7 +14,91 @@ export class PackageService {
         this.db = dynamoDBService;
     }
 
-    static async createPackage(packageData: PackageData, metadata?: PackageMetadata): Promise<Package> {
+    static async processPackageFromUrl(url: string): Promise<ProcessedPackage> {
+        try {
+            log.info(`Processing package from URL: ${url}`);
+            
+            // Parse URL to get owner and repo
+            const urlType = checkUrlType(url);
+            if (!urlType) {
+                throw new Error('Invalid URL format');
+            }
+            const repoInfo = await processUrl(urlType, url);
+            if (!repoInfo) {
+                throw new Error('Failed to process URL');
+            }
+            const { owner, repo } = repoInfo;
+            
+            // Calculate metrics first to ensure package is valid
+            const metrics = await GetNetScore(owner, repo, url);
+            if (!metrics) {
+                throw new Error('Failed to calculate metrics');
+            }
+            
+            // Create package in DynamoDB
+            const packageId = `${owner}/${repo}`;
+            const packageRating: PackageRating = {
+                BusFactor: metrics.BusFactor,
+                Correctness: metrics.Correctness,
+                RampUp: metrics.RampUp,
+                ResponsiveMaintainer: metrics.ResponsiveMaintainer,
+                LicenseScore: metrics.License,
+                GoodPinningPractice: 0, // Not calculated by GetNetScore
+                PullRequest: 0, // Not calculated by GetNetScore
+                NetScore: metrics.NetScore,
+                BusFactorLatency: metrics.BusFactor_Latency,
+                CorrectnessLatency: metrics.Correctness_Latency,
+                RampUpLatency: metrics.RampUp_Latency,
+                ResponsiveMaintainerLatency: metrics.ResponsiveMaintainer_Latency,
+                LicenseScoreLatency: metrics.License_Latency,
+                GoodPinningPracticeLatency: 0,
+                PullRequestLatency: 0,
+                NetScoreLatency: metrics.NetScore_Latency
+            };
+
+            const pkg: Package = {
+                metadata: {
+                    Name: repo,
+                    Version: '1.0.0', // Default version
+                    ID: packageId
+                },
+                data: {
+                    URL: url
+                }
+            };
+
+            await dynamoDBService.createPackage(pkg);
+            await dynamoDBService.updatePackageRating(packageId, packageRating);
+
+            const processedPackage: ProcessedPackage = {
+                url,
+                metrics: {
+                    BusFactor: metrics.BusFactor,
+                    Correctness: metrics.Correctness,
+                    RampUp: metrics.RampUp,
+                    ResponsiveMaintainer: metrics.ResponsiveMaintainer,
+                    LicenseScore: metrics.License,
+                    GoodPinningPractice: 0,
+                    PullRequest: 0,
+                    NetScore: metrics.NetScore
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            return processedPackage;
+        } catch (error) {
+            if (error instanceof Error) {
+                log.error(`Error processing package from URL ${url}: ${error.message}`);
+                throw error;
+            } else {
+                const err = new Error(`Unknown error processing package from URL ${url}`);
+                log.error(err.message);
+                throw err;
+            }
+        }
+    }
+
+    static async createPackage(packageData: PackageData, metadata: PackageMetadata): Promise<Package> {
         try {
             log.info('Creating new package');
             
@@ -43,7 +131,6 @@ export class PackageService {
             throw error;
         }
     }
-
     static async getPackage(id: string): Promise<Package> {
         try {
             const pkg = await dynamoDBService.getPackage(id);
@@ -66,4 +153,6 @@ export class PackageService {
         // Not implemented yet - we'll add this later if needed
         throw new Error('Not implemented');
     }
+
+    
 }

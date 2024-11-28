@@ -1,11 +1,22 @@
-export default {
-    preset: 'ts-jest',
-    testEnvironment: 'node',
-    transform: {
-      '^.+\\.tsx?$': 'ts-jest',
-    },
-    testMatch: ['<rootDir>/test/*.test.ts'], // Only run test scripts in the test folder
-    collectCoverage: true,
-    coverageDirectory: 'coverage',
-    coverageReporters: ['json', 'text'],
-  };
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  transform: {
+    '^.+\\.tsx?$': 'ts-jest',
+  },
+  testMatch: ['<rootDir>/test/*.test.ts'],
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['json', 'text'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/.nvm/',
+    '/dist/'
+  ],
+  modulePathIgnorePatterns: [
+    '/.nvm/',
+    '/node_modules/',
+    '/dist/'
+  ]
+};

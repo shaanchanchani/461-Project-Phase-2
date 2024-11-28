@@ -39,6 +39,22 @@ export interface Package {
     data: PackageData;
 }
 
+// Processed Package Type
+export interface ProcessedPackage {
+    url: string;
+    metrics: {
+        BusFactor: number;
+        Correctness: number;
+        RampUp: number;
+        ResponsiveMaintainer: number;
+        LicenseScore: number;
+        GoodPinningPractice: number;
+        PullRequest: number;
+        NetScore: number;
+    };
+    timestamp: string;
+}
+
 // Search and Query Types
 export interface PackageQuery {
     Version?: string;
