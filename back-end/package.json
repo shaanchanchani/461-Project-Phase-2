@@ -8,7 +8,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Running tests...\" && jest --detectOpenHandles --verbose --coverage",
+    "test": "NODE_ENV=test node -r dotenv/config --env-file=.env.test ./node_modules/.bin/jest --detectOpenHandles --verbose --coverage",
     "build": "tsc",
     "cli": "ts-node cli.ts",
     "lint": "eslint .",
@@ -44,6 +44,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.x",
     "@aws-sdk/lib-dynamodb": "^3.x",
+    "@smithy/middleware-retry": "^3.0.28",
     "@smithy/node-http-handler": "^3.2.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
