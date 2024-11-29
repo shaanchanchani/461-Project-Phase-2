@@ -27,7 +27,7 @@ export function LoginPage() {
         console.log('Sending request:', requestData);
 
         try {
-            const response = await fetch('https://3000-01jdswgvp5v0yssm5cv98hhykt.cloudspaces.litng.ai/authenticate', {
+            const response = await fetch('http://localhost:3000/authenticate', {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
