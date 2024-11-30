@@ -52,7 +52,7 @@ const PackageRegistry: React.FC = () => {
       const response = await fetch('http://localhost:3000/packages', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ offset: '0' }), // You can make this dynamic later
+        body: JSON.stringify([{ Name: "*" }])  // Query to get all packages
       });
 
       if (!response.ok) {

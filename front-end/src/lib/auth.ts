@@ -13,5 +13,5 @@ export const isAuthenticated = () => !!getAuthToken();
 // Get headers with authentication token
 export const getAuthHeaders = () => ({
     'Content-Type': 'application/json',
-    'X-Authorization': `bearer ${getAuthToken() || ''}`
+    'X-Authorization': getAuthToken() || ''
 });

@@ -1,4 +1,5 @@
 back-end/dist/
+back-end/docker
 #ignore node_modules
 node_modules
 

@@ -16,7 +16,7 @@ import {
     GetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
-import { Package, PackageID, DB, PackageRating } from '../types';
+import { Package, PackageID, DB, PackageRating, PackageMetadata } from '../types';
 import { log } from '../logger';
 
 const TABLE_NAME = process.env.DYNAMODB_TABLE || 'packages';
@@ -200,6 +200,30 @@ export class DynamoDBService {
             log.info(`Updated rating for package ${id}`);
         } catch (error) {
             log.error('Error updating package rating:', error);
+            throw error;
+        }
+    }
+
+    async listPackages(offset?: string): Promise<PackageMetadata[]> {
+        try {
+            const command = new QueryCommand({
+                TableName: TABLE_NAME,
+                KeyConditionExpression: 'PK = :pk',
+                ExpressionAttributeValues: {
+                    ':pk': 'PACKAGE'
+                },
+                ExclusiveStartKey: offset ? JSON.parse(offset) : undefined,
+                Limit: 10 // Limit results per page
+            });
+
+            const response = await this.docClient.send(command);
+            return (response.Items || []).map(item => ({
+                Name: item.Name,
+                Version: item.Version,
+                ID: item.ID
+            }));
+        } catch (error) {
+            log.error('Error listing packages from DynamoDB:', error);
             throw error;
         }
     }
