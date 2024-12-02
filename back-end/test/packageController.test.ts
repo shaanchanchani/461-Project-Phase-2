@@ -74,6 +74,70 @@ describe('PackageController', () => {
             expect(mockRes.status).toHaveBeenCalledWith(400);
             expect(mockRes.json).toHaveBeenCalledWith({ error: 'Must provide either Content or URL' });
         });
+
+        it('should handle duplicate package uploads', async () => {
+            mockReq.body = { URL: 'https://github.com/owner/repo' };
+            mockPackageService.createPackage.mockRejectedValue(
+                new Error('Package repo already exists in the registry')
+            );
+
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(409);
+            expect(mockRes.json).toHaveBeenCalledWith({ 
+                error: 'Package repo already exists in the registry' 
+            });
+        });
+
+        it('should validate GitHub URLs correctly', async () => {
+            mockReq.body = { URL: 'invalid-url' };
+            
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(400);
+            expect(mockRes.json).toHaveBeenCalledWith({ 
+                error: 'Invalid URL format. Please use a valid GitHub (github.com/owner/repo) or npm (npmjs.com/package/name) URL' 
+            });
+        });
+
+        it('should validate npm URLs correctly', async () => {
+            mockReq.body = { URL: 'https://npmjs.com/package/invalid/format' };
+            
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(400);
+            expect(mockRes.json).toHaveBeenCalledWith({ 
+                error: 'Invalid URL format. Please use a valid GitHub (github.com/owner/repo) or npm (npmjs.com/package/name) URL' 
+            });
+        });
+
+        it('should handle both URL and Content being provided', async () => {
+            mockReq.body = { 
+                URL: 'https://github.com/owner/repo',
+                Content: 'base64content'
+            };
+
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(400);
+            expect(mockRes.json).toHaveBeenCalledWith({ 
+                error: 'Cannot provide both Content and URL' 
+            });
+        });
+
+        it('should handle package size limit exceeded', async () => {
+            mockReq.body = { Content: 'large-base64-content' };
+            mockPackageService.createPackage.mockRejectedValue(
+                new Error('Package size exceeds limit')
+            );
+
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(400);
+            expect(mockRes.json).toHaveBeenCalledWith({ 
+                error: 'Package size must be less than 50MB' 
+            });
+        });
     });
 
     describe('getPackage', () => {
