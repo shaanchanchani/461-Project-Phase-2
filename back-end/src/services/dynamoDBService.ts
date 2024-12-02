@@ -16,7 +16,7 @@ import {
     GetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
-import { Package, PackageID, DB, PackageRating, PackageMetadata } from '../types';
+import { Package, PackageID, DB, PackageRating, PackageMetadata, PackageData } from '../types';
 import { log } from '../logger';
 
 const TABLE_NAME = process.env.DYNAMODB_TABLE || 'packages';
@@ -149,13 +149,14 @@ export class DynamoDBService {
         }
     }
 
-    async getPackage(id: PackageID, version?: string): Promise<Package | null> {
+    async getPackage(idOrName: string, version?: string): Promise<Package | null> {
         try {
+            // If version is provided, try to get specific version
             if (version) {
                 const result = await this.docClient.send(new GetCommand({
                     TableName: TABLE_NAME,
                     Key: {
-                        PK: `PKG#${id}`,
+                        PK: `PKG#${idOrName}`,
                         SK: `METADATA#${version}`
                     }
                 }));
@@ -163,19 +164,37 @@ export class DynamoDBService {
                 return result.Item ? DB.toAPIPackage(result.Item as DB.DynamoPackageItem) : null;
             }
 
-            const result = await this.docClient.send(new QueryCommand({
+            // Try to get by ID first
+            const resultById = await this.docClient.send(new QueryCommand({
                 TableName: TABLE_NAME,
                 KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
                 ExpressionAttributeValues: {
-                    ':pk': `PKG#${id}`,
+                    ':pk': `PKG#${idOrName}`,
                     ':sk': 'METADATA#'
                 },
                 Limit: 1,
-                ScanIndexForward: false
+                ScanIndexForward: false // Get the latest version first
             }));
 
-            if (!result.Items?.length) return null;
-            return DB.toAPIPackage(result.Items[0] as DB.DynamoPackageItem);
+            if (resultById.Items?.length) {
+                return DB.toAPIPackage(resultById.Items[0] as DB.DynamoPackageItem);
+            }
+
+            // If not found by ID, try to find by name using a query
+            const resultByName = await this.docClient.send(new QueryCommand({
+                TableName: TABLE_NAME,
+                FilterExpression: 'metadata.Name = :name',
+                ExpressionAttributeValues: {
+                    ':name': idOrName
+                },
+                Limit: 1
+            }));
+
+            if (resultByName.Items?.length) {
+                return DB.toAPIPackage(resultByName.Items[0] as DB.DynamoPackageItem);
+            }
+
+            return null;
         } catch (error) {
             log.error('Error retrieving package:', error);
             throw error;

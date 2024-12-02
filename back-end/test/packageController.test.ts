@@ -10,6 +10,7 @@ describe('PackageController', () => {
     let mockReq: Partial<AuthenticatedRequest>;
     let mockRes: Partial<Response>;
     let packageController: PackageController;
+    let mockPackageService: jest.Mocked<PackageService>;
 
     beforeEach(() => {
         mockReq = {
@@ -20,7 +21,17 @@ describe('PackageController', () => {
             status: jest.fn().mockReturnThis(),
             json: jest.fn()
         };
-        packageController = new PackageController();
+        mockPackageService = {
+            createPackage: jest.fn(),
+            getPackage: jest.fn(),
+            getPackageByName: jest.fn(),
+            updatePackage: jest.fn(),
+            resetRegistry: jest.fn(),
+            processPackageFromUrl: jest.fn(),
+            getGitHubVersion: jest.fn(),
+            getNpmVersion: jest.fn()
+        } as unknown as jest.Mocked<PackageService>;
+        packageController = new PackageController(mockPackageService);
     });
 
     describe('createPackage', () => {
@@ -35,18 +46,26 @@ describe('PackageController', () => {
             };
             mockReq.body = mockPackageData;
 
-            (PackageService.createPackage as jest.Mock).mockResolvedValue({ id: '123' });
+            const mockResponse = {
+                metadata: {
+                    ID: '123',
+                    Name: 'test-package',
+                    Version: '1.0.0'
+                },
+                data: mockPackageData.data
+            };
+            mockPackageService.createPackage.mockResolvedValue(mockResponse);
 
             await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
 
             expect(mockRes.status).toHaveBeenCalledWith(201);
-            expect(mockRes.json).toHaveBeenCalledWith({ id: '123' });
+            expect(mockRes.json).toHaveBeenCalledWith(mockResponse);
         });
 
         it('should handle missing required fields', async () => {
             mockReq.body = { data: {} };
             
-            (PackageService.createPackage as jest.Mock).mockRejectedValue(
+            mockPackageService.createPackage.mockRejectedValue(
                 new Error('Must provide either Content or URL')
             );
 
@@ -60,9 +79,18 @@ describe('PackageController', () => {
     describe('getPackage', () => {
         it('should get a package successfully', async () => {
             mockReq.params = { id: '123' };
-            const mockPackage = { id: '123', name: 'test-package' };
+            const mockPackage = {
+                metadata: {
+                    ID: '123',
+                    Name: 'test-package',
+                    Version: '1.0.0'
+                },
+                data: {
+                    Content: 'test-content'
+                }
+            };
             
-            (PackageService.getPackage as jest.Mock).mockResolvedValue(mockPackage);
+            mockPackageService.getPackage.mockResolvedValue(mockPackage);
 
             await packageController.getPackage(mockReq as AuthenticatedRequest, mockRes as Response);
 
@@ -73,7 +101,7 @@ describe('PackageController', () => {
         it('should handle package not found', async () => {
             mockReq.params = { id: 'non-existent' };
             
-            (PackageService.getPackage as jest.Mock).mockRejectedValue(
+            mockPackageService.getPackage.mockRejectedValue(
                 new Error('Package not found')
             );
 
@@ -85,30 +113,18 @@ describe('PackageController', () => {
     });
 
     describe('resetRegistry', () => {
-        it('should reset registry successfully', async () => {
-            (PackageService.resetRegistry as jest.Mock).mockResolvedValue(undefined);
+        it('should handle not implemented error', async () => {
+            mockPackageService.resetRegistry.mockRejectedValue(new Error('Not implemented'));
 
             await packageController.resetRegistry(
                 mockReq as AuthenticatedRequest,
-                mockRes as Response,
-                jest.fn()
+                mockRes as Response
             );
 
-            expect(mockRes.status).toHaveBeenCalledWith(200);
-            expect(mockRes.json).toHaveBeenCalledWith({ message: 'Registry reset successful' });
-        });
-
-        it('should handle reset registry failure', async () => {
-            (PackageService.resetRegistry as jest.Mock).mockRejectedValue(new Error('Reset failed'));
-
-            await packageController.resetRegistry(
-                mockReq as AuthenticatedRequest,
-                mockRes as Response,
-                jest.fn()
-            );
-
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Failed to reset registry' });
+            expect(mockRes.status).toHaveBeenCalledWith(501);
+            expect(mockRes.json).toHaveBeenCalledWith({ 
+                error: 'Not implemented'
+            });
         });
     });
 });

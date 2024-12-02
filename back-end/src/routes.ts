@@ -36,7 +36,7 @@ router.delete('/reset', (req: AuthenticatedRequest, res: Response, next: NextFun
         });
         return;
     }
-    packageController.resetRegistry(req, res, next);
+    packageController.resetRegistry(req, res);
 });
 
 router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));

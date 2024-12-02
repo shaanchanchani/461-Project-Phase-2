@@ -25,8 +25,13 @@ interface RepoInfo {
 export function checkUrlType(url: string): UrlType {
   log.info(`Checking URL type for: ${url}`);
 
-  const githubPattern = /^(https?:\/\/)?(www\.)?github\.com\/[^\/]+\/[^\/]+/;
-  const npmPattern = /^(https?:\/\/)?(www\.)?npmjs\.com\/package\/[^\/]+/;
+  // Updated patterns to be more flexible
+  const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)\/?(?:\.git)?$/;
+  const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)\/?$/;
+
+  log.info(`Testing URL against patterns:
+    GitHub: ${githubPattern.test(url)}
+    npm: ${npmPattern.test(url)}`);
 
   if (githubPattern.test(url)) {
     log.info(`URL identified as GitHub URL.`);

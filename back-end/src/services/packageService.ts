@@ -14,7 +14,7 @@ export class PackageService {
         this.db = dynamoDBService;
     }
 
-    static async processPackageFromUrl(url: string): Promise<ProcessedPackage> {
+    async processPackageFromUrl(url: string): Promise<ProcessedPackage> {
         try {
             log.info(`Processing package from URL: ${url}`);
             
@@ -34,6 +34,9 @@ export class PackageService {
             if (!metrics) {
                 throw new Error('Failed to calculate metrics');
             }
+
+            // Get version from GitHub
+            const version = await this.getGitHubVersion(owner, repo) || "1.0.0"; // Default to "1.0.0" if null
             
             // Create package in DynamoDB
             const packageId = `${owner}/${repo}`;
@@ -43,8 +46,8 @@ export class PackageService {
                 RampUp: metrics.RampUp,
                 ResponsiveMaintainer: metrics.ResponsiveMaintainer,
                 LicenseScore: metrics.License,
-                GoodPinningPractice: 0, // Not calculated by GetNetScore
-                PullRequest: 0, // Not calculated by GetNetScore
+                GoodPinningPractice: 0,
+                PullRequest: 0,
                 NetScore: metrics.NetScore,
                 BusFactorLatency: metrics.BusFactor_Latency,
                 CorrectnessLatency: metrics.Correctness_Latency,
@@ -56,19 +59,21 @@ export class PackageService {
                 NetScoreLatency: metrics.NetScore_Latency
             };
 
+            const packageMetadata: PackageMetadata = {
+                Name: repo,
+                Version: version,
+                ID: packageId
+            };
+
             const pkg: Package = {
-                metadata: {
-                    Name: repo,
-                    Version: '1.0.0', // Default version
-                    ID: packageId
-                },
+                metadata: packageMetadata,
                 data: {
                     URL: url
                 }
             };
 
-            await dynamoDBService.createPackage(pkg);
-            await dynamoDBService.updatePackageRating(packageId, packageRating);
+            await this.db.createPackage(pkg);
+            await this.db.updatePackageRating(packageId, packageRating);
 
             const processedPackage: ProcessedPackage = {
                 url,
@@ -98,61 +103,155 @@ export class PackageService {
         }
     }
 
-    static async createPackage(packageData: PackageData, metadata: PackageMetadata): Promise<Package> {
+    public async getGitHubVersion(owner: string, repo: string): Promise<string | null> {
         try {
-            log.info('Creating new package');
-            
-            // Validate package data
-            if (!metadata?.Name || !metadata?.Version) {
-                throw new Error('Missing required metadata fields');
+            // Try to get package.json content from the default branch
+            const response = await fetch(
+                `https://api.github.com/repos/${owner}/${repo}/contents/package.json`,
+                {
+                    headers: {
+                        'Accept': 'application/vnd.github.v3+json',
+                        // Add GitHub token if you have one
+                        // 'Authorization': `token ${process.env.GITHUB_TOKEN}`
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch package.json');
             }
 
-            if ((packageData.Content && packageData.URL) || (!packageData.Content && !packageData.URL)) {
-                throw new Error('Must provide either Content or URL, but not both');
+            const data = await response.json();
+            // GitHub API returns content as base64
+            const content = Buffer.from(data.content, 'base64').toString('utf-8');
+            const packageJson = JSON.parse(content);
+
+            return packageJson.version || null;
+        } catch (error) {
+            log.warn(`Could not fetch version from GitHub: ${error}`);
+            return null;
+        }
+    }
+
+    public async getNpmVersion(packageName: string): Promise<string | null> {
+        try {
+            const response = await fetch(`https://registry.npmjs.org/${packageName}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch npm package info');
             }
 
-            // Create package object
+            const data = await response.json();
+            return data['dist-tags']?.latest || null;
+        } catch (error) {
+            log.warn(`Could not fetch version from npm: ${error}`);
+            return null;
+        }
+    }
+
+    public async getPackageByName(name: string): Promise<Package | null> {
+        try {
+            // Query packages by name pattern
+            const result = await this.db.getPackage(name);
+            return result;
+        } catch (error) {
+            log.error('Error getting package by name:', error);
+            return null;
+        }
+    }
+
+    public async createPackage(packageData: PackageData, metadata: PackageMetadata): Promise<Package> {
+        try {
+            // Validate package content if provided
+            if (packageData.Content) {
+                const buffer = Buffer.from(packageData.Content, 'base64');
+                
+                // Check file size (50MB limit)
+                if (buffer.length > 50 * 1024 * 1024) {
+                    throw new Error('Package size exceeds limit');
+                }
+
+                // Here you would add logic to validate if it's a valid npm package
+                // This is a placeholder for the actual validation
+                if (!this.isValidNpmPackage(buffer)) {
+                    throw new Error('Invalid package format');
+                }
+            }
+
+            // If URL is provided, try to fetch version
+            let version = metadata.Version;
+            if (packageData.URL) {
+                try {
+                    const urlObj = new URL(packageData.URL);
+                    if (urlObj.hostname === 'github.com') {
+                        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+                        if (pathParts.length === 2) {
+                            const [owner, repo] = pathParts;
+                            const githubVersion = await this.getGitHubVersion(owner, repo);
+                            if (githubVersion) version = githubVersion;
+                        }
+                    } else if (urlObj.hostname.includes('npmjs.com')) {
+                        const packageName = urlObj.pathname.split('/package/')[1];
+                        if (packageName) {
+                            const npmVersion = await this.getNpmVersion(packageName.split('@')[0]);
+                            if (npmVersion) version = npmVersion;
+                        }
+                    }
+                } catch (error) {
+                    log.warn('Error fetching version:', error);
+                    // Continue with default version
+                }
+            }
+
+            // Create package in database
             const pkg: Package = {
                 metadata: {
-                    Name: metadata.Name,
-                    Version: metadata.Version,
-                    ID: metadata.ID || '' // Will be generated by DynamoDB service
+                    ...metadata,
+                    Version: version
                 },
-                data: packageData
+                data: {
+                    ...packageData,
+                    // Don't store the Content in the database if it's too large
+                    Content: packageData.Content 
+                        ? (packageData.Content.length > 1000 
+                            ? '[LARGE_BINARY_CONTENT]' 
+                            : packageData.Content)
+                        : undefined
+                }
             };
 
-            // Store in DynamoDB
-            const createdPackage = await dynamoDBService.createPackage(pkg);
-            log.info(`Successfully created package ${metadata.Name} v${metadata.Version}`);
-            
-            return createdPackage;
-        } catch (error) {
-            log.error('Error creating package:', error);
-            throw error;
-        }
-    }
-    static async getPackage(id: string): Promise<Package> {
-        try {
-            const pkg = await dynamoDBService.getPackage(id);
-            if (!pkg) {
-                throw new Error('Package not found');
-            }
+            await this.db.createPackage(pkg);
             return pkg;
         } catch (error) {
-            log.error('Error retrieving package:', error);
+            log.error('Error in createPackage:', error);
             throw error;
         }
     }
 
-    static async updatePackage(id: string, packageData: PackageData): Promise<void> {
-        // Not implemented yet - we'll add this later if needed
+    private isValidNpmPackage(buffer: Buffer): boolean {
+        try {
+            // This is a basic check - you might want to add more sophisticated validation
+            // For example, checking for package.json, valid structure, etc.
+            return buffer.length > 0;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    async getPackage(id: string): Promise<Package> {
+        const pkg = await this.db.getPackage(id);
+        if (!pkg) {
+            throw new Error('Package not found');
+        }
+        return pkg;
+    }
+
+    async updatePackage(id: string, packageData: PackageData): Promise<void> {
+        // Not implemented yet
         throw new Error('Not implemented');
     }
 
-    static async resetRegistry(): Promise<void> {
-        // Not implemented yet - we'll add this later if needed
+    async resetRegistry(): Promise<void> {
+        // Not implemented yet
         throw new Error('Not implemented');
     }
-
-    
 }

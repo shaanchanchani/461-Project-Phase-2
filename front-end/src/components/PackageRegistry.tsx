@@ -17,17 +17,25 @@ import {
 import { Label } from "@/components/ui/label";
 
 interface PackageData {
-  Name: string;
-  Version: string;
-  ID: string;
+  metadata: {
+    Name: string;
+    Version: string;
+    ID: string;
+  };
+  data: {
+    Content?: string;
+    URL?: string;
+    JSProgram?: string;
+    debloat?: boolean;
+  };
 }
 
 interface UploadFormData {
-  name: string;
-  version: string;
   url: string;
   file: File | null;
   uploadType: 'url' | 'file';
+  JSProgram: string;
+  debloat: boolean;
 }
 
 const PackageRegistry: React.FC = () => {
@@ -37,11 +45,11 @@ const PackageRegistry: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadFormData, setUploadFormData] = useState<UploadFormData>({
-    name: '',
-    version: '',
     url: '',
     file: null,
-    uploadType: 'url'
+    uploadType: 'url',
+    JSProgram: '',
+    debloat: false
   });
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -51,16 +59,34 @@ const PackageRegistry: React.FC = () => {
     try {
       const response = await fetch('http://localhost:3000/packages', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify([{ Name: "*" }])  // Query to get all packages
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch packages');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch packages');
       }
 
       const data = await response.json();
-      setPackages(data);
+      // Transform the response to match our PackageData interface
+      const transformedData = data.map((pkg: any) => ({
+        metadata: {
+          Name: pkg.Name || pkg.metadata?.Name,
+          Version: pkg.Version || pkg.metadata?.Version,
+          ID: pkg.ID || pkg.metadata?.ID
+        },
+        data: {
+          URL: pkg.URL || pkg.data?.URL,
+          Content: pkg.Content || pkg.data?.Content,
+          JSProgram: pkg.JSProgram || pkg.data?.JSProgram,
+          debloat: pkg.debloat || pkg.data?.debloat
+        }
+      }));
+      setPackages(transformedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while fetching packages');
     } finally {
@@ -75,66 +101,190 @@ const PackageRegistry: React.FC = () => {
     }
   };
 
+  const validateUrl = (url: string): boolean => {
+    try {
+      // Use the same patterns as the backend
+      const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)\/?(?:\.git)?$/;
+      const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)\/?$/;
+
+      console.log('Validating URL:', url);
+      console.log('GitHub pattern test:', githubPattern.test(url));
+      console.log('npm pattern test:', npmPattern.test(url));
+
+      return githubPattern.test(url) || npmPattern.test(url);
+    } catch (error) {
+      console.error('URL validation error:', error);
+      return false;
+    }
+  };
+
+  const validateFile = (file: File): boolean => {
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_SIZE) {
+      throw new Error('File size exceeds 50MB limit');
+    }
+    if (!file.name.endsWith('.zip')) {
+      throw new Error('File must be a ZIP archive');
+    }
+    return true;
+  };
+
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setUploadStatus(null);
     setLoading(true);
+
     try {
-      let packageContent = null;
-      
-      if (uploadFormData.uploadType === 'file' && uploadFormData.file) {
+      // Validate URL if upload type is URL
+      if (uploadFormData.uploadType === 'url') {
+        if (!uploadFormData.url) {
+          setUploadStatus({
+            success: false,
+            message: 'Please enter a URL'
+          });
+          return;
+        }
+        
+        if (!validateUrl(uploadFormData.url)) {
+          setUploadStatus({
+            success: false,
+            message: 'Please enter a valid GitHub or npm package URL'
+          });
+          return;
+        }
+      }
+
+      // Validate file if upload type is file
+      if (uploadFormData.uploadType === 'file') {
+        if (!uploadFormData.file) {
+          setUploadStatus({
+            success: false,
+            message: 'Please select a file to upload'
+          });
+          return;
+        }
+        if (!uploadFormData.file.name.endsWith('.zip')) {
+          setUploadStatus({
+            success: false,
+            message: 'File must be a ZIP archive'
+          });
+          return;
+        }
+        const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+        if (uploadFormData.file.size > MAX_SIZE) {
+          setUploadStatus({
+            success: false,
+            message: 'File size must be less than 50MB'
+          });
+          return;
+        }
+      }
+
+      // After validations pass, prepare the request
+      let requestBody: {
+        URL?: string;
+        Content?: string;
+        JSProgram?: string;
+        debloat?: boolean;
+      } = {};
+
+      if (uploadFormData.uploadType === 'url') {
+        requestBody.URL = uploadFormData.url;
+      } else if (uploadFormData.file) {
         // Convert file to base64
-        const reader = new FileReader();
-        packageContent = await new Promise((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(uploadFormData.file!);
-        });
-        // Remove the data:application/zip;base64, prefix
-        packageContent = (packageContent as string).split(',')[1];
+        const fileBuffer = await uploadFormData.file.arrayBuffer();
+        const base64String = btoa(
+          new Uint8Array(fileBuffer)
+            .reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+        requestBody.Content = base64String;
+      }
+
+      // Add optional flags if they are provided
+      if (uploadFormData.JSProgram.trim()) {
+        requestBody.JSProgram = uploadFormData.JSProgram.trim();
+      }
+      if (uploadFormData.debloat) {
+        requestBody.debloat = true;
       }
 
       const response = await fetch('http://localhost:3000/package', {
         method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          metadata: {
-            Name: uploadFormData.name,
-            Version: uploadFormData.version,
-          },
-          data: uploadFormData.uploadType === 'url'
-            ? { URL: uploadFormData.url }
-            : { Content: packageContent }
-        }),
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
       });
+
+      const responseData = await response.json();
+      console.log('Server response:', { status: response.status, data: responseData });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload package');
+        console.log('Error response:', responseData);
+        setUploadStatus({
+          success: false,
+          message: responseData.error || 'Failed to upload package'
+        });
+        setLoading(false);
+        return;
       }
 
-      const result = await response.json();
-      setUploadStatus({ success: true, message: 'Package uploaded successfully!' });
-      setUploadDialogOpen(false);
-      // Reset form
-      setUploadFormData({
-        name: '',
-        version: '',
-        url: '',
-        file: null,
-        uploadType: 'url'
+      // Transform the response to match our PackageData interface if needed
+      const packageData = {
+        metadata: {
+          Name: responseData.Name || responseData.metadata?.Name,
+          Version: responseData.Version || responseData.metadata?.Version,
+          ID: responseData.ID || responseData.metadata?.ID
+        },
+        data: {
+          URL: responseData.URL || responseData.data?.URL,
+          Content: responseData.Content || responseData.data?.Content,
+          JSProgram: responseData.JSProgram || responseData.data?.JSProgram,
+          debloat: responseData.debloat || responseData.data?.debloat
+        }
+      };
+
+      // Success case
+      setUploadStatus({
+        success: true,
+        message: `Package ${packageData.metadata.Name}@${packageData.metadata.Version} uploaded successfully!`
       });
+
       // Refresh the package list
-      fetchPackages();
+      await fetchPackages();
+
+      // Wait a moment to show the success message before closing
+      setTimeout(() => {
+        // Reset form
+        setUploadFormData({
+          url: '',
+          file: null,
+          uploadType: 'url',
+          JSProgram: '',
+          debloat: false
+        });
+        setUploadDialogOpen(false);
+      }, 1500); // Show success message for 1.5 seconds
     } catch (err) {
+      console.error('Upload error:', err);
       setUploadStatus({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to upload package',
+        message: err instanceof Error ? err.message : 'Failed to upload package'
       });
     } finally {
       setLoading(false);
     }
   };
+
+  const ErrorDisplay = ({ message }: { message: string }) => (
+    <Alert variant="destructive" className="border-red-500 bg-red-50">
+      <AlertDescription className="text-red-600 font-medium">
+        {message}
+      </AlertDescription>
+    </Alert>
+  );
 
   return (
     <div className="container mx-auto p-4 max-w-4xl space-y-6">
@@ -176,37 +326,17 @@ const PackageRegistry: React.FC = () => {
                       Upload Package
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-2xl">
                     <DialogHeader>
                       <DialogTitle>Upload New Package</DialogTitle>
                       <DialogDescription>
-                        Enter the package details below. You can upload a package by providing its GitHub/NPM URL or uploading a ZIP file.
+                        Upload a new package by providing either a URL or a zip file.
                       </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleUploadSubmit} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Package Name</Label>
-                        <Input
-                          id="name"
-                          value={uploadFormData.name}
-                          onChange={(e) => setUploadFormData(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="e.g., my-awesome-package"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="version">Version</Label>
-                        <Input
-                          id="version"
-                          value={uploadFormData.version}
-                          onChange={(e) => setUploadFormData(prev => ({ ...prev, version: e.target.value }))}
-                          placeholder="e.g., 1.0.0"
-                          required
-                        />
-                      </div>
 
+                    <form onSubmit={handleUploadSubmit} className="space-y-6">
                       <div className="space-y-2">
-                        <Label>Upload Method</Label>
+                        <Label>Upload Type</Label>
                         <div className="flex space-x-4">
                           <label className="flex items-center space-x-2">
                             <input
@@ -214,11 +344,9 @@ const PackageRegistry: React.FC = () => {
                               name="uploadType"
                               value="url"
                               checked={uploadFormData.uploadType === 'url'}
-                              onChange={(e) => setUploadFormData(prev => ({ 
-                                ...prev, 
-                                uploadType: e.target.value as 'url' | 'file',
-                                file: null,
-                                url: ''
+                              onChange={(e) => setUploadFormData(prev => ({
+                                ...prev,
+                                uploadType: e.target.value as 'url' | 'file'
                               }))}
                             />
                             <span>URL</span>
@@ -229,14 +357,12 @@ const PackageRegistry: React.FC = () => {
                               name="uploadType"
                               value="file"
                               checked={uploadFormData.uploadType === 'file'}
-                              onChange={(e) => setUploadFormData(prev => ({ 
-                                ...prev, 
-                                uploadType: e.target.value as 'url' | 'file',
-                                file: null,
-                                url: ''
+                              onChange={(e) => setUploadFormData(prev => ({
+                                ...prev,
+                                uploadType: e.target.value as 'url' | 'file'
                               }))}
                             />
-                            <span>ZIP File</span>
+                            <span>File</span>
                           </label>
                         </div>
                       </div>
@@ -248,34 +374,64 @@ const PackageRegistry: React.FC = () => {
                             id="url"
                             value={uploadFormData.url}
                             onChange={(e) => setUploadFormData(prev => ({ ...prev, url: e.target.value }))}
-                            placeholder="GitHub or NPM URL"
-                            required={uploadFormData.uploadType === 'url'}
+                            placeholder="https://github.com/owner/repo or https://www.npmjs.com/package/name"
                           />
+                          <p className="text-sm text-gray-500">
+                            Enter a valid GitHub repository URL or npm package URL
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <Label htmlFor="file">Package ZIP File</Label>
+                          <Label htmlFor="file">Package File</Label>
                           <Input
                             id="file"
                             type="file"
                             accept=".zip"
                             onChange={handleFileChange}
-                            required={uploadFormData.uploadType === 'file'}
                           />
+                          <p className="text-sm text-gray-500">
+                            Upload a zip file (max 50MB)
+                          </p>
                         </div>
                       )}
 
+                      <div className="space-y-2">
+                        <Label htmlFor="JSProgram">JS Program</Label>
+                        <textarea
+                          id="JSProgram"
+                          className="w-full min-h-[100px] p-2 border rounded-md"
+                          value={uploadFormData.JSProgram}
+                          onChange={(e) => setUploadFormData(prev => ({ ...prev, JSProgram: e.target.value }))}
+                          placeholder="Enter your JS Program here (optional)"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Package Options</Label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="debloat"
+                            checked={uploadFormData.debloat}
+                            onChange={(e) => setUploadFormData(prev => ({ ...prev, debloat: e.target.checked }))}
+                          />
+                          <label htmlFor="debloat" className="text-sm">
+                            Enable package debloat (removes unnecessary content)
+                          </label>
+                        </div>
+                      </div>
+
                       {uploadStatus && (
-                        <Alert variant={uploadStatus.success ? "default" : "destructive"}>
-                          <AlertDescription>{uploadStatus.message}</AlertDescription>
+                        <Alert variant={uploadStatus.success ? "default" : "destructive"} 
+                              className={`${uploadStatus.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}>
+                          <AlertDescription className={`${uploadStatus.success ? 'text-green-600' : 'text-red-600'} font-medium`}>
+                            {uploadStatus.message}
+                          </AlertDescription>
                         </Alert>
                       )}
+
                       <div className="flex justify-end space-x-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setUploadDialogOpen(false)}
-                        >
+                        <Button type="button" variant="outline" onClick={() => setUploadDialogOpen(false)}>
                           Cancel
                         </Button>
                         <Button type="submit" disabled={loading}>
@@ -352,18 +508,36 @@ const PackageRegistry: React.FC = () => {
           {packages.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Available Packages</h3>
-              <div className="grid gap-4">
+              <div className="grid gap-4 mt-4">
                 {packages.map((pkg) => (
-                  <Card key={pkg.ID}>
+                  <Card key={pkg.metadata.ID} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-center">
                         <div>
-                          <h4 className="font-medium">{pkg.Name}</h4>
-                          <p className="text-sm text-gray-500">Version: {pkg.Version}</p>
+                          <h3 className="text-lg font-semibold">{pkg.metadata.Name}</h3>
+                          <p className="text-sm text-gray-500">Version: {pkg.metadata.Version}</p>
+                          {pkg.data.URL && (
+                            <a 
+                              href={pkg.data.URL} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-sm text-blue-500 hover:text-blue-700"
+                            >
+                              View Source
+                            </a>
+                          )}
                         </div>
-                        <Button variant="outline" size="sm">
-                          View Details
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownload(pkg.metadata.ID)}
+                            disabled={loading}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Download
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
