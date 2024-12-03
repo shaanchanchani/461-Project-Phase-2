@@ -100,21 +100,22 @@ describe('PackageController', () => {
     describe('getPackage', () => {
         it('should get a package successfully', async () => {
             mockReq.params = { id: '123' };
-            const mockPackage: PackageTableItem = {
+            const packageData: PackageTableItem = {
                 package_id: '123',
                 name: 'test-package',
                 latest_version: '1.0.0',
-                description: 'Test package description',
-                created_at: new Date().toISOString()
+                description: 'Test package',
+                created_at: new Date().toISOString(),
+                user_id: 'test-user'
             };
 
-            mockPackageService.getPackageById.mockResolvedValue(mockPackage);
+            mockPackageService.getPackageById.mockResolvedValue(packageData);
 
             await packageController.getPackage(mockReq as AuthenticatedRequest, mockRes as Response);
 
             expect(mockPackageService.getPackageById).toHaveBeenCalledWith('123');
             expect(mockRes.status).toHaveBeenCalledWith(200);
-            expect(mockRes.json).toHaveBeenCalledWith(mockPackage);
+            expect(mockRes.json).toHaveBeenCalledWith(packageData);
         });
 
         it('should return 404 if package not found', async () => {
@@ -141,21 +142,22 @@ describe('PackageController', () => {
     describe('getPackageByName', () => {
         it('should get a package by name successfully', async () => {
             mockReq.params = { name: 'test-package' };
-            const mockPackage: PackageTableItem = {
+            const packageData: PackageTableItem = {
                 package_id: '123',
                 name: 'test-package',
                 latest_version: '1.0.0',
-                description: 'Test package description',
-                created_at: new Date().toISOString()
+                description: 'Test package',
+                created_at: new Date().toISOString(),
+                user_id: 'test-user'
             };
 
-            mockPackageService.getPackageByName.mockResolvedValue(mockPackage);
+            mockPackageService.getPackageByName.mockResolvedValue(packageData);
 
             await packageController.getPackageByName(mockReq as AuthenticatedRequest, mockRes as Response);
 
             expect(mockPackageService.getPackageByName).toHaveBeenCalledWith('test-package');
             expect(mockRes.status).toHaveBeenCalledWith(200);
-            expect(mockRes.json).toHaveBeenCalledWith(mockPackage);
+            expect(mockRes.json).toHaveBeenCalledWith(packageData);
         });
     });
 });

@@ -52,6 +52,7 @@ export interface PackageTableItem {
     latest_version: string;
     description: string;
     created_at: string;
+    user_id: string;  // Added user_id field
 }
 
 export interface PackageVersionTableItem {

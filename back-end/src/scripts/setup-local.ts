@@ -27,7 +27,8 @@ async function createPackagesTable() {
             TableName: PACKAGES_TABLE,
             AttributeDefinitions: [
                 { AttributeName: 'name', AttributeType: 'S' },
-                { AttributeName: 'package_id', AttributeType: 'S' }
+                { AttributeName: 'package_id', AttributeType: 'S' },
+                { AttributeName: 'user_id', AttributeType: 'S' }
             ],
             KeySchema: [
                 { AttributeName: 'name', KeyType: 'HASH' }
@@ -37,6 +38,19 @@ async function createPackagesTable() {
                     IndexName: 'package_id-index',
                     KeySchema: [
                         { AttributeName: 'package_id', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                },
+                {
+                    IndexName: 'user_id-index',
+                    KeySchema: [
+                        { AttributeName: 'user_id', KeyType: 'HASH' }
                     ],
                     Projection: {
                         ProjectionType: 'ALL'
@@ -184,6 +198,21 @@ async function createDownloadsTable() {
             console.log('ℹ️  Downloads table already exists');
         } else {
             throw error;
+        }
+    }
+}
+
+async function deleteTable(tableName: string) {
+    try {
+        await dynamodb.deleteTable({ TableName: tableName });
+        console.log(`🗑️  Deleted table ${tableName}`);
+        // Wait a bit for the table to be fully deleted
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error: any) {
+        if (error.name === 'ResourceNotFoundException') {
+            console.log(`ℹ️  Table ${tableName} does not exist`);
+        } else {
+            console.error(`❌ Error deleting table ${tableName}:`, error);
         }
     }
 }

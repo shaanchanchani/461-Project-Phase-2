@@ -23,6 +23,11 @@ export class PackageController {
     public createPackage = async (req: AuthenticatedRequest, res: Response) => {
         try {
             const { URL: url, Content, JSProgram, debloat } = req.body;
+            const userId = req.user?.name;
+
+            if (!userId) {
+                return res.status(401).json({ error: 'User not authenticated' });
+            }
 
             if (!url && !Content) {
                 return res.status(400).json({ error: 'Either URL or Content must be provided' });
@@ -33,8 +38,8 @@ export class PackageController {
             }
 
             const result = url 
-                ? await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat)
-                : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat);
+                ? await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat, userId)
+                : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat, userId);
 
             return res.status(201).json(result);
         } catch (error) {

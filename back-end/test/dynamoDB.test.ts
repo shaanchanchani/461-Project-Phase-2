@@ -68,7 +68,8 @@ describe('DynamoDBService', () => {
                 name: 'test-package',
                 latest_version: '1.0.0',
                 description: 'Test package',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                user_id: 'test-user'
             };
 
             mockDocClientSend.mockResolvedValue({ Items: [mockPackage] });
@@ -109,7 +110,8 @@ describe('DynamoDBService', () => {
             name: 'test-package',
             latest_version: '1.0.0',
             description: 'Test package',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            user_id: 'test-user'
         };
 
         it('should create package entry when package does not exist', async () => {

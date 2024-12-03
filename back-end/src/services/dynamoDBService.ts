@@ -216,6 +216,29 @@ export class DynamoDBService {
     }
 
     /**
+     * Get packages by user ID
+     * @param userId The ID of the user
+     * @returns Array of package items
+     */
+    async getPackagesByUserId(userId: string): Promise<PackageTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGES_TABLE,
+                IndexName: 'user_id-index',
+                KeyConditionExpression: 'user_id = :userId',
+                ExpressionAttributeValues: {
+                    ':userId': userId
+                }
+            }));
+
+            return result.Items as PackageTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting packages by user ID:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Record a package download in the downloads table
      * @param downloadData The download data to record
      */

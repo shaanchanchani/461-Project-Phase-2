@@ -24,7 +24,7 @@ export class PackageUploadService {
     };
   }
 
-  public async uploadPackageFromUrl(url: string, jsProgram?: string, debloat: boolean = false): Promise<PackageUploadResponse> {
+  public async uploadPackageFromUrl(url: string, jsProgram?: string, debloat: boolean = false, userId?: string): Promise<PackageUploadResponse> {
     try {
       // Validate URL
       const urlType = checkUrlType(url);
@@ -67,7 +67,8 @@ export class PackageUploadService {
         name,
         latest_version: version,
         description,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        user_id: userId || 'anonymous'
       };
 
       // Create version entry in DynamoDB
@@ -103,7 +104,7 @@ export class PackageUploadService {
     }
   }
 
-  public async uploadPackageFromZip(content: string, jsProgram?: string, debloat: boolean = false): Promise<PackageUploadResponse> {
+  public async uploadPackageFromZip(content: string, jsProgram?: string, debloat: boolean = false, userId?: string): Promise<PackageUploadResponse> {
     try {
       // Decode base64 content to buffer
       const zipBuffer = Buffer.from(content, 'base64');
@@ -140,7 +141,8 @@ export class PackageUploadService {
         name,
         latest_version: version,
         description,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        user_id: userId || 'anonymous'
       };
 
       // Create version entry in DynamoDB
