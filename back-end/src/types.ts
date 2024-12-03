@@ -63,6 +63,18 @@ export interface PackageVersionTableItem {
     created_at: string;
 }
 
+export interface PackageMetricsTableItem {
+    metric_id: string;      // UUID
+    version_id: string;     // UUID reference to package version
+    net_score: number;      // Overall package quality score
+    bus_factor: number;     // Project maintenance risk metric
+    ramp_up: number;        // Project readiness metric
+    license_score: number;  // License compliance metric
+    correctness: number;    // Code quality assessment
+    dependency_pinning: number;  // Dependency version control metric (0-1)
+    pull_request_review: number; // Code review coverage metric (0-1)
+}
+
 // Package Types
 export interface PackageMetadata {
     Name: PackageName;

@@ -9,6 +9,7 @@ const execAsync = promisify(exec);
 
 const PACKAGES_TABLE = process.env.DYNAMODB_PACKAGES_TABLE || 'Packages';
 const PACKAGE_VERSIONS_TABLE = process.env.DYNAMODB_PACKAGE_VERSIONS_TABLE || 'PackageVersions';
+const PACKAGE_METRICS_TABLE = process.env.DYNAMODB_PACKAGE_METRICS_TABLE || 'PackageMetrics';
 
 const dynamodb = new DynamoDB({
     endpoint: 'http://localhost:8000',
@@ -87,6 +88,33 @@ async function createVersionsTable() {
     }
 }
 
+async function createMetricsTable() {
+    try {
+        await dynamodb.createTable({
+            TableName: PACKAGE_METRICS_TABLE,
+            AttributeDefinitions: [
+                { AttributeName: 'metric_id', AttributeType: 'S' },
+                { AttributeName: 'version_id', AttributeType: 'S' }
+            ],
+            KeySchema: [
+                { AttributeName: 'metric_id', KeyType: 'HASH' },
+                { AttributeName: 'version_id', KeyType: 'RANGE' }
+            ],
+            ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5
+            }
+        });
+        console.log('✅ Metrics table created');
+    } catch (error: any) {
+        if (error.name === 'ResourceInUseException') {
+            console.log('ℹ️  Metrics table already exists');
+        } else {
+            throw error;
+        }
+    }
+}
+
 async function waitForDynamoDB() {
     console.log('⏳ Waiting for DynamoDB to be ready...');
     let retries = 0;
@@ -128,6 +156,7 @@ async function setupLocalDev() {
         console.log('📝 Creating DynamoDB tables...');
         await createPackagesTable();
         await createVersionsTable();
+        await createMetricsTable();
         
         console.log('✨ Local development environment setup complete!');
         console.log('\nYou can now:');
