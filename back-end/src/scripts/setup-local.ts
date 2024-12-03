@@ -97,8 +97,22 @@ async function createMetricsTable() {
                 { AttributeName: 'version_id', AttributeType: 'S' }
             ],
             KeySchema: [
-                { AttributeName: 'metric_id', KeyType: 'HASH' },
-                { AttributeName: 'version_id', KeyType: 'RANGE' }
+                { AttributeName: 'metric_id', KeyType: 'HASH' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'version_id-index',
+                    KeySchema: [
+                        { AttributeName: 'version_id', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
             ],
             ProvisionedThroughput: {
                 ReadCapacityUnits: 5,

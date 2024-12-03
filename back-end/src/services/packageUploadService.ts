@@ -7,6 +7,8 @@ import { checkUrlType, UrlType } from '../utils/urlUtils';
 import { PackageTableItem, PackageVersionTableItem, PackageUploadResponse } from '../types';
 import axios from 'axios';
 import AdmZip from 'adm-zip';
+import { GetNetScore } from '../metrics/netScore';
+import { metricService } from './metricService';
 
 export class PackageUploadService {
   private db: DynamoDBService;
@@ -35,6 +37,9 @@ export class PackageUploadService {
       if (urlType === UrlType.npm) {
         githubUrl = await this.handleNpmUrl(url);
       }
+
+      // Check package metrics before proceeding
+      const metrics = await this.checkPackageMetrics(githubUrl);
 
       // Extract package info from URL
       const { name, version, description } = await this.extractPackageInfo(githubUrl);
@@ -74,6 +79,9 @@ export class PackageUploadService {
         debloated: debloat,
         created_at: new Date().toISOString()
       };
+
+      // Store the metrics
+      await metricService.createMetricEntry(versionId, metrics);
 
       await this.db.createPackageEntry(packageData);
       await this.db.createPackageVersion(versionData);
@@ -289,6 +297,55 @@ export class PackageUploadService {
     } catch (error) {
       log.error(`Failed to fetch GitHub URL for npm package:`, error);
       throw error;
+    }
+  }
+
+  private async checkPackageMetrics(url: string): Promise<{
+    net_score: number;
+    bus_factor: number;
+    ramp_up: number;
+    license_score: number;
+    correctness: number;
+    dependency_pinning: number;
+    pull_request_review: number;
+  }> {
+    try {
+      // Extract owner and repo from GitHub URL
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      const [owner, repo] = pathParts;
+
+      // Calculate metrics
+      const metrics = await GetNetScore(owner, repo, url);
+      
+      if (!metrics) {
+        throw new Error('Failed to calculate package metrics');
+      }
+
+      // You can adjust this threshold based on your requirements
+      const MINIMUM_NET_SCORE = 0.5;
+      
+      if (metrics.NetScore < MINIMUM_NET_SCORE) {
+        throw new Error(`Package does not meet quality requirements. Net score: ${metrics.NetScore}`);
+      }
+
+      log.info(`Package metrics check passed. Net score: ${metrics.NetScore}`);
+
+      // Return metrics in the format needed for storage
+      return {
+        net_score: metrics.NetScore,
+        bus_factor: metrics.BusFactor || 0,
+        ramp_up: metrics.RampUp || 0,
+        license_score: metrics.License || 0,
+        correctness: metrics.Correctness || 0,
+        dependency_pinning: 0.5, // Temporarily set to 0.5 until implementation
+        pull_request_review: 0.5  // Temporarily set to 0.5 until implementation
+      };
+    } catch (error) {
+      log.error('Package metrics check failed:', error);
+      const err = new Error('Package failed quality requirements');
+      err.name = 'PackageQualityError';
+      throw err;
     }
   }
 }

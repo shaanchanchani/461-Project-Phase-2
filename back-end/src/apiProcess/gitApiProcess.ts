@@ -29,7 +29,7 @@ export interface RepoDetails {
   stars: number;
   openIssues: number;
   forks: number;
-  license: string;
+  license: string | null;
   commitsData: any[];
   issuesData: any[];
   contributorsData: any[];
@@ -163,7 +163,7 @@ async function getGithubInfo(
     license: license,
     commitsData: allCommits,
     issuesData: allIssues,
-    contributorsData: contributorsData.data,
+    contributorsData: contributorsData,
   };
   log.debug(`Repository details for ${owner}/${repo}:`, repoDetails);
 
@@ -338,14 +338,15 @@ async function _fetchLatestIssues(
 async function _fetchContributors(owner: string, repo: string): Promise<any> {
   try {
     const contributorsUrl = `${GITHUB_API_URL}/${owner}/${repo}/stats/contributors`;
-    const contributorsData = await axios.get(contributorsUrl, {
+    const response = await axios.get(contributorsUrl, {
       headers: {
         Authorization: `token ${process.env.GITHUB_TOKEN}`,
       },
     });
-    return contributorsData;
+    return response.data || []; // Return just the data array, or empty array if no data
   } catch (error) {
-    _handleError(error, `Failed to fetch contributors for ${owner}/${repo}`);
+    log.error(`Failed to fetch contributors for ${owner}/${repo}:`, error);
+    return []; // Return empty array on error instead of throwing
   }
 }
 

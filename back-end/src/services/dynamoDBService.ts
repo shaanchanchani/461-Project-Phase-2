@@ -20,12 +20,14 @@ import {
     Package, 
     PackageID, 
     PackageTableItem,
-    PackageVersionTableItem
+    PackageVersionTableItem,
+    PackageMetricsTableItem
 } from '../types';
 import { log } from '../logger';
 
 const PACKAGES_TABLE = process.env.DYNAMODB_PACKAGES_TABLE || 'Packages';
 const PACKAGE_VERSIONS_TABLE = process.env.DYNAMODB_PACKAGE_VERSIONS_TABLE || 'PackageVersions';
+const PACKAGE_METRICS_TABLE = process.env.DYNAMODB_PACKAGE_METRICS_TABLE || 'PackageMetrics';
 
 export class DynamoDBService {
     private readonly docClient: DynamoDBDocumentClient;
@@ -102,6 +104,41 @@ export class DynamoDBService {
             await this.put(PACKAGE_VERSIONS_TABLE, versionData);
         } catch (error) {
             log.error('Error creating package version:', error);
+            throw error;
+        }
+    }
+
+    public async createMetricEntry(metricEntry: PackageMetricsTableItem): Promise<void> {
+        try {
+            const params = {
+                TableName: PACKAGE_METRICS_TABLE,
+                Item: metricEntry,
+                ConditionExpression: 'attribute_not_exists(metric_id)'
+            };
+
+            await this.docClient.send(new PutCommand(params));
+            log.info(`Created metric entry for version ${metricEntry.version_id}`);
+        } catch (error) {
+            log.error('Error creating metric entry:', error);
+            throw error;
+        }
+    }
+
+    public async getMetricsByVersionId(versionId: string): Promise<PackageMetricsTableItem | null> {
+        try {
+            const params = {
+                TableName: PACKAGE_METRICS_TABLE,
+                IndexName: 'version_id-index',
+                KeyConditionExpression: 'version_id = :versionId',
+                ExpressionAttributeValues: {
+                    ':versionId': versionId
+                }
+            };
+
+            const result = await this.docClient.send(new QueryCommand(params));
+            return result.Items?.[0] as PackageMetricsTableItem || null;
+        } catch (error) {
+            log.error('Error getting metrics by version ID:', error);
             throw error;
         }
     }

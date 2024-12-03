@@ -33,6 +33,15 @@ export class PackageController {
         } catch (error) {
             if (error instanceof Error) {
                 log.error('Error in createPackage:', error);
+                
+                if (error.name === 'PackageQualityError') {
+                    return res.status(424).json({ error: 'Package failed quality requirements' });
+                }
+
+                if (error.message.includes('already exists')) {
+                    return res.status(409).json({ error: error.message });
+                }
+
                 return res.status(400).json({ error: error.message });
             }
             return res.status(500).json({ error: 'Internal server error' });

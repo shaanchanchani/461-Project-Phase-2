@@ -1,113 +1,53 @@
-//Check if package contain valid license
+// Check if package contains valid license
 import { RepoDetails } from "../apiProcess/gitApiProcess";
 import { log } from "../logger";
-// License map containing SPDX identifiers and their corresponding scores
-const licenseScoreMap: { [key: string]: number } = {
-  // SPDX and full license names from your list
-  "AFL-3.0": 0,
-  "Academic Free License v3.0": 0,
 
-  "Apache-2.0": 0.5,
-  "Apache License 2.0": 0.5,
+interface LicenseDefinition {
+  name: string;
+  pattern?: RegExp;
+  patterns?: RegExp[];
+  score?: number;
+}
 
-  "Artistic-2.0": 1,
-  "Artistic License 2.0": 1,
-
-  "BSL-1.0": 1,
-  "Boost Software License 1.0": 1,
-
-  "BSD-2-Clause": 1,
-  "BSD 2-clause Simplified License": 1,
-
-  "BSD-3-Clause": 1,
-  "BSD 3-clause New or Revised License": 1,
-
-  "BSD-3-Clause-Clear": 1,
-  "BSD 3-clause Clear License": 1,
-
-  "BSD-4-Clause": 0,
-  "BSD 4-clause Original or Old License": 0,
-
-  "0BSD": 1,
-  "BSD Zero Clause License": 1,
-
-  CC: 0,
-  "Creative Commons License Family": 0,
-
-  "CC0-1.0": 0,
-  "Creative Commons Zero v1.0 Universal": 0,
-
-  "CC-BY-4.0": 0,
-  "Creative Commons Attribution 4.0": 0,
-
-  "CC-BY-SA-4.0": 0,
-  "Creative Commons Attribution ShareAlike 4.0": 0,
-
-  WTFPL: 0.5,
-  "Do What The F*ck You Want To Public License": 0.5,
-
-  "ECL-2.0": 0,
-  "Educational Community License v2.0": 0,
-
-  "EPL-1.0": 0,
-  "Eclipse Public License 1.0": 0,
-
-  "EPL-2.0": 0,
-  "Eclipse Public License 2.0": 0,
-
-  "EUPL-1.1": 0,
-  "European Union Public License 1.1": 0,
-
-  "AGPL-3.0": 0,
-  "GNU Affero General Public License v3.0": 0,
-
-  GPL: 0,
-  "GPL-2.0": 0,
-  "GPL-3.0": 0,
-  "GNU General Public License family": 0,
-  "GNU General Public License v2.0": 0,
-  "GNU General Public License v3.0": 0,
-
-  LGPL: 0,
-  "LGPL-2.1": 1,
-  "LGPL-3.0": 0,
-  "GNU Lesser General Public License family": 0,
-  "GNU Lesser General Public License v2.1": 1,
-  "GNU Lesser General Public License v3.0": 0,
-
-  ISC: 1,
-  "ISC License": 1,
-
-  "LPPL-1.3c": 0,
-  "LaTeX Project Public License v1.3c": 0,
-
-  "MS-PL": 0,
-  "Microsoft Public License": 0,
-
-  MIT: 1,
-  "MIT License": 1,
-
-  "MPL-2.0": 0,
-  "Mozilla Public License 2.0": 0,
-
-  "OSL-3.0": 0,
-  "Open Software License 3.0": 0,
-
-  PostgreSQL: 1,
-  "PostgreSQL License": 1,
-
-  "OFL-1.1": 0,
-  "SIL Open Font License 1.1": 0,
-
-  NCSA: 1,
-  "University of Illinois/NCSA Open Source License": 1,
-
-  Unlicense: 1,
-  "The Unlicense": 1,
-
-  Zlib: 1,
-  "zLib License": 1,
-};
+// Define compatible licenses with their patterns
+const COMPATIBLE_LICENSES: LicenseDefinition[] = [
+  { name: 'MIT', pattern: /\bMIT\b/i, score: 1.0 },
+  { 
+    name: 'Apache-2.0',
+    patterns: [
+      /\bAPACHE(?:[-\s]+LICENSE)?(?:[-\s]+V(?:ERSION)?)?[-\s]*2(?:\.0)?\b/i,
+      /\bAPACHE[-\s]2\.0\b/i
+    ],
+    score: 1.0 
+  },
+  { 
+    name: 'GPL-3.0', 
+    patterns: [
+      /\bGPL[\s-]?(?:V(?:ERSION)?\s*)?3(?:\.0)?\b/i,
+      /\bGNU\s+GENERAL\s+PUBLIC\s+LICENSE\s+(?:V(?:ERSION)?\s*)?3(?:\.0)?\b/i
+    ],
+    score: 0.9
+  },
+  { 
+    name: 'GPL-2.0', 
+    patterns: [
+      /\bGPL[\s-]?(?:V(?:ERSION)?\s*)?2(?:\.0)?\b/i,
+      /\bGNU\s+GENERAL\s+PUBLIC\s+LICENSE\s+(?:V(?:ERSION)?\s*)?2(?:\.0)?\b/i
+    ],
+    score: 0.9
+  },
+  { name: 'BSD-3-Clause', pattern: /\bBSD[\s-]3[\s-]CLAUSE\b/i, score: 1.0 },
+  { name: 'BSD-2-Clause', pattern: /\bBSD[\s-]2[\s-]CLAUSE\b/i, score: 1.0 },
+  { 
+    name: 'LGPL-2.1', 
+    patterns: [
+      /\bLGPL[\s-]?(?:V(?:ERSION)?\s*)?2\.1\b/i,
+      /\bGNU\s+LESSER\s+GENERAL\s+PUBLIC\s+LICENSE\s+(?:V(?:ERSION)?\s*)?2\.1\b/i
+    ],
+    score: 0.9
+  },
+  { name: 'Zlib', pattern: /\bZLIB\b/i, score: 1.0 }
+];
 
 /*
   Function Name: calculateLicenseCompatibility
@@ -117,18 +57,54 @@ const licenseScoreMap: { [key: string]: number } = {
   @returns: number - The license compatibility score based on the license, or 0 if no valid license is found.
 */
 export function calculateLicenseCompatibility(metrics: RepoDetails): number {
-  // Extract the license from the RepoDetails object
   log.info(`Calculating license compatibility...`);
   const license = metrics.license;
 
-  // Check if the exact license exists in the licenseScoreMap
-  if (license && licenseScoreMap.hasOwnProperty(license)) {
-    // Return the score if the license matches
-    log.info(`Finished calculating license compatibility. Exiting...`);
-    return licenseScoreMap[license];
+  if (!license) {
+    log.info(`No license found. Exiting...`);
+    return 0;
   }
 
-  // Return 0 if no valid license is found in the map
-  log.info(`No valid license found. Exiting...`);
+  // First try exact SPDX match
+  const matchingLicense = COMPATIBLE_LICENSES.find(l => l.name.toLowerCase() === license.toLowerCase());
+  if (matchingLicense) {
+    log.info(`Found exact SPDX match: ${license}`);
+    return matchingLicense.score || 0;
+  }
+
+  // Check each license definition
+  for (const licenseDefinition of COMPATIBLE_LICENSES) {
+    // Check single pattern if it exists
+    if (licenseDefinition.pattern && licenseDefinition.pattern.test(license)) {
+      log.info(`Found license match: ${license} matches pattern for ${licenseDefinition.name}`);
+      return licenseDefinition.score || 0;
+    }
+    
+    // Check multiple patterns if they exist
+    if (licenseDefinition.patterns) {
+      for (const pattern of licenseDefinition.patterns) {
+        if (pattern.test(license)) {
+          log.info(`Found license match: ${license} matches pattern for ${licenseDefinition.name}`);
+          return licenseDefinition.score || 0;
+        }
+      }
+    }
+  }
+
+  // If no match found yet, try extracting SPDX identifier
+  const spdxMatch = license.match(/\b[A-Z0-9\-\.]+\b/g);
+  if (spdxMatch) {
+    const spdxId = spdxMatch[0];
+    log.info(`Extracted SPDX identifier: ${spdxId}`);
+    
+    // Check if this SPDX ID matches any license name
+    const matchingBySpdx = COMPATIBLE_LICENSES.find(l => l.name.toLowerCase() === spdxId.toLowerCase());
+    if (matchingBySpdx) {
+      log.info(`Found SPDX match: ${spdxId} matches ${matchingBySpdx.name}`);
+      return matchingBySpdx.score || 0;
+    }
+  }
+
+  log.info(`No valid license match found for "${license}". Exiting...`);
   return 0;
 }
