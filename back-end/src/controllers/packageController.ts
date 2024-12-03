@@ -1,16 +1,23 @@
 import { Response } from 'express';
 import { PackageService } from '../services/packageService';
 import { PackageUploadService } from '../services/packageUploadService';
+import { PackageDownloadService } from '../services/packageDownloadService';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { log } from '../logger';
 
 export class PackageController {
     private packageService: PackageService;
     private packageUploadService: PackageUploadService;
+    private packageDownloadService: PackageDownloadService;
 
-    constructor(packageService?: PackageService, packageUploadService?: PackageUploadService) {
+    constructor(
+        packageService?: PackageService,
+        packageUploadService?: PackageUploadService,
+        packageDownloadService?: PackageDownloadService
+    ) {
         this.packageService = packageService || new PackageService();
         this.packageUploadService = packageUploadService || new PackageUploadService();
+        this.packageDownloadService = packageDownloadService || new PackageDownloadService();
     }
 
     public createPackage = async (req: AuthenticatedRequest, res: Response) => {
@@ -50,16 +57,21 @@ export class PackageController {
 
     public getPackage = async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const { id } = req.params;
-            const result = await this.packageService.getPackageById(id);
-            
-            if (!result) {
-                return res.status(404).json({ error: 'Package not found' });
+            const { name } = req.params;
+            const userName = req.user?.name;
+            if (!userName) {
+                return res.status(401).json({ error: 'User not authenticated' });
             }
-
+            const result = await this.packageDownloadService.getPackageByName(name, userName);
             res.status(200).json(result);
         } catch (error) {
             log.error('Error retrieving package:', error);
+            if (error instanceof Error) {
+                if (error.message === 'Package not found') {
+                    return res.status(404).json({ error: 'Package not found' });
+                }
+                return res.status(400).json({ error: error.message });
+            }
             res.status(500).json({ error: 'Failed to retrieve package' });
         }
     }
@@ -82,16 +94,21 @@ export class PackageController {
 
     public getPackageVersion = async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const { packageId, version } = req.params;
-            const result = await this.packageService.getPackageVersion(packageId, version);
-            
-            if (!result) {
-                return res.status(404).json({ error: 'Package version not found' });
+            const { name, version } = req.params;
+            const userName = req.user?.name;
+            if (!userName) {
+                return res.status(401).json({ error: 'User not authenticated' });
             }
-
+            const result = await this.packageDownloadService.getPackageVersion(name, version, userName);
             res.status(200).json(result);
         } catch (error) {
             log.error('Error retrieving package version:', error);
+            if (error instanceof Error) {
+                if (error.message === 'Package not found' || error.message === 'Package version not found') {
+                    return res.status(404).json({ error: error.message });
+                }
+                return res.status(400).json({ error: error.message });
+            }
             res.status(500).json({ error: 'Failed to retrieve package version' });
         }
     }

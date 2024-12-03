@@ -32,9 +32,9 @@ router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
 
 // Package Retrieval Endpoints
 router.get('/package/name/:name', asyncHandler(packageController.getPackageByName));
-router.get('/package/:id', asyncHandler(packageController.getPackage));
-router.get('/package/:id/versions', asyncHandler(packageController.listPackageVersions));
-router.get('/package/:packageId/version/:version', asyncHandler(packageController.getPackageVersion));
+router.get('/package/:name', asyncHandler(packageController.getPackage));
+router.get('/package/:name/versions', asyncHandler(packageController.listPackageVersions));
+router.get('/package/:name/version/:version', asyncHandler(packageController.getPackageVersion));
 
 // Package Rating Endpoints
 router.get('/package/:id/rate', asyncHandler(RatingController.getRating));

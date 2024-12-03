@@ -75,6 +75,14 @@ export interface PackageMetricsTableItem {
     pull_request_review: number; // Code review coverage metric (0-1)
 }
 
+export interface DownloadTableItem {
+    download_id: string;    // UUID
+    user_id: string;        // UUID reference to user
+    package_id: string;     // UUID reference to package
+    version: string;        // Package version
+    timestamp: string;      // ISO string timestamp
+}
+
 // Package Types
 export interface PackageMetadata {
     Name: PackageName;

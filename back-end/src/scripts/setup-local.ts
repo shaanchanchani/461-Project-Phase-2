@@ -10,6 +10,7 @@ const execAsync = promisify(exec);
 const PACKAGES_TABLE = process.env.DYNAMODB_PACKAGES_TABLE || 'Packages';
 const PACKAGE_VERSIONS_TABLE = process.env.DYNAMODB_PACKAGE_VERSIONS_TABLE || 'PackageVersions';
 const PACKAGE_METRICS_TABLE = process.env.DYNAMODB_PACKAGE_METRICS_TABLE || 'PackageMetrics';
+const DOWNLOADS_TABLE = process.env.DYNAMODB_DOWNLOADS_TABLE || 'Downloads';
 
 const dynamodb = new DynamoDB({
     endpoint: 'http://localhost:8000',
@@ -129,6 +130,64 @@ async function createMetricsTable() {
     }
 }
 
+async function createDownloadsTable() {
+    try {
+        await dynamodb.createTable({
+            TableName: DOWNLOADS_TABLE,
+            AttributeDefinitions: [
+                { AttributeName: 'download_id', AttributeType: 'S' },
+                { AttributeName: 'user_id', AttributeType: 'S' },
+                { AttributeName: 'package_id', AttributeType: 'S' },
+                { AttributeName: 'timestamp', AttributeType: 'S' }
+            ],
+            KeySchema: [
+                { AttributeName: 'download_id', KeyType: 'HASH' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'UserDownloadsIndex',
+                    KeySchema: [
+                        { AttributeName: 'user_id', KeyType: 'HASH' },
+                        { AttributeName: 'timestamp', KeyType: 'RANGE' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                },
+                {
+                    IndexName: 'PackageDownloadsIndex',
+                    KeySchema: [
+                        { AttributeName: 'package_id', KeyType: 'HASH' },
+                        { AttributeName: 'timestamp', KeyType: 'RANGE' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
+            ],
+            ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5
+            }
+        });
+        console.log('✅ Downloads table created');
+    } catch (error: any) {
+        if (error.name === 'ResourceInUseException') {
+            console.log('ℹ️  Downloads table already exists');
+        } else {
+            throw error;
+        }
+    }
+}
+
 async function waitForDynamoDB() {
     console.log('⏳ Waiting for DynamoDB to be ready...');
     let retries = 0;
@@ -171,6 +230,7 @@ async function setupLocalDev() {
         await createPackagesTable();
         await createVersionsTable();
         await createMetricsTable();
+        await createDownloadsTable();
         
         console.log('✨ Local development environment setup complete!');
         console.log('\nYou can now:');

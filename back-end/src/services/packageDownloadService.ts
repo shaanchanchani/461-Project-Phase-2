@@ -1,80 +1,115 @@
-import { exec } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { S3Service } from './s3Service';
+import { DynamoDBService, dynamoDBService } from './dynamoDBService';
 import { log } from '../logger';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { Package, PackageTableItem, PackageVersionTableItem } from '../types';
+import * as crypto from 'crypto';
 
 export class PackageDownloadService {
-    private static readonly TEMP_DIR = path.join(process.cwd(), 'temp_packages');
+    private s3Service: S3Service;
+    private db: DynamoDBService;
 
-    static async cloneRepository(owner: string, repo: string, branch = 'main'): Promise<string> {
+    constructor() {
+        this.s3Service = new S3Service();
+        this.db = dynamoDBService;
+    }
+
+    /**
+     * Get a package by its name, including its content from S3
+     * @param packageName The name of the package
+     * @param userName The name of the user downloading the package
+     * @returns Package object with metadata and content
+     */
+    public async getPackageByName(packageName: string, userName: string): Promise<Package> {
         try {
-            // Create temp directory if it doesn't exist
-            if (!fs.existsSync(this.TEMP_DIR)) {
-                fs.mkdirSync(this.TEMP_DIR, { recursive: true });
+            // Get package metadata from DynamoDB
+            const packageData = await this.db.getPackageByName(packageName);
+            if (!packageData) {
+                throw new Error('Package not found');
             }
 
-            const repoDir = path.join(this.TEMP_DIR, `${owner}-${repo}`);
-            
-            // Remove existing directory if it exists
-            if (fs.existsSync(repoDir)) {
-                fs.rmSync(repoDir, { recursive: true, force: true });
+            // Get latest version data
+            const versionData = await this.db.getLatestPackageVersion(packageData.package_id);
+            if (!versionData) {
+                throw new Error('Package version not found');
             }
 
-            // Clone the repository
-            const cloneUrl = `https://github.com/${owner}/${repo}.git`;
-            log.info(`Cloning repository from ${cloneUrl}`);
-            
-            await execAsync(`git clone --depth 1 --branch ${branch} ${cloneUrl} ${repoDir}`);
-            
-            log.info(`Successfully cloned repository to ${repoDir}`);
-            return repoDir;
+            // Get content from S3 using the zip file path
+            const content = await this.s3Service.getPackageContent(versionData.zip_file_path);
+            const base64Content = content.toString('base64');
+
+            // Record the download
+            await this.db.recordDownload({
+                download_id: crypto.randomUUID(),
+                package_id: packageData.package_id,
+                user_id: userName,
+                version: versionData.version,
+                timestamp: new Date().toISOString()
+            });
+
+            // Return in the format specified by OpenAPI
+            return {
+                metadata: {
+                    Name: packageData.name,
+                    Version: versionData.version,
+                    ID: packageData.package_id
+                },
+                data: {
+                    Content: base64Content
+                }
+            };
         } catch (error) {
-            log.error('Error cloning repository:', error);
-            throw new Error(`Failed to clone repository ${owner}/${repo}: ${error}`);
+            log.error('Error downloading package:', error);
+            throw error;
         }
     }
 
-    static async downloadNpmPackage(packageName: string): Promise<string> {
+    /**
+     * Get a specific version of a package by name
+     * @param packageName The name of the package
+     * @param version The specific version to retrieve
+     * @param userName The name of the user downloading the package
+     * @returns Package object with metadata and content
+     */
+    public async getPackageVersion(packageName: string, version: string, userName: string): Promise<Package> {
         try {
-            // Create temp directory if it doesn't exist
-            if (!fs.existsSync(this.TEMP_DIR)) {
-                fs.mkdirSync(this.TEMP_DIR, { recursive: true });
+            // Get package metadata
+            const packageData = await this.db.getPackageByName(packageName);
+            if (!packageData) {
+                throw new Error('Package not found');
             }
 
-            const packageDir = path.join(this.TEMP_DIR, packageName);
-            
-            // Remove existing directory if it exists
-            if (fs.existsSync(packageDir)) {
-                fs.rmSync(packageDir, { recursive: true, force: true });
+            // Get specific version data
+            const versionData = await this.db.getPackageVersion(packageData.package_id, version);
+            if (!versionData) {
+                throw new Error('Package version not found');
             }
 
-            // Create package directory
-            fs.mkdirSync(packageDir);
+            // Get content from S3 using the zip file path
+            const content = await this.s3Service.getPackageContent(versionData.zip_file_path);
+            const base64Content = content.toString('base64');
 
-            // Initialize npm package and install the target package
-            log.info(`Downloading npm package ${packageName}`);
-            await execAsync('npm init -y', { cwd: packageDir });
-            await execAsync(`npm install ${packageName}`, { cwd: packageDir });
-            
-            log.info(`Successfully downloaded package to ${packageDir}`);
-            return packageDir;
+            // Record the download
+            await this.db.recordDownload({
+                download_id: crypto.randomUUID(),
+                package_id: packageData.package_id,
+                user_id: userName,
+                version: version,
+                timestamp: new Date().toISOString()
+            });
+
+            // Return in the format specified by OpenAPI
+            return {
+                metadata: {
+                    Name: packageData.name,
+                    Version: version,
+                    ID: packageData.package_id
+                },
+                data: {
+                    Content: base64Content
+                }
+            };
         } catch (error) {
-            log.error('Error downloading npm package:', error);
-            throw new Error(`Failed to download npm package ${packageName}: ${error}`);
-        }
-    }
-
-    static async cleanupPackage(packagePath: string): Promise<void> {
-        try {
-            if (fs.existsSync(packagePath)) {
-                fs.rmSync(packagePath, { recursive: true, force: true });
-                log.info(`Cleaned up package directory: ${packagePath}`);
-            }
-        } catch (error) {
-            log.error('Error cleaning up package:', error);
+            log.error('Error downloading package version:', error);
             throw error;
         }
     }

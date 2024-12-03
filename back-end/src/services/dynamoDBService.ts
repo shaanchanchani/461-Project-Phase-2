@@ -21,13 +21,15 @@ import {
     PackageID, 
     PackageTableItem,
     PackageVersionTableItem,
-    PackageMetricsTableItem
+    PackageMetricsTableItem,
+    DownloadTableItem
 } from '../types';
 import { log } from '../logger';
 
 const PACKAGES_TABLE = process.env.DYNAMODB_PACKAGES_TABLE || 'Packages';
 const PACKAGE_VERSIONS_TABLE = process.env.DYNAMODB_PACKAGE_VERSIONS_TABLE || 'PackageVersions';
 const PACKAGE_METRICS_TABLE = process.env.DYNAMODB_PACKAGE_METRICS_TABLE || 'PackageMetrics';
+const DOWNLOADS_TABLE = process.env.DYNAMODB_DOWNLOADS_TABLE || 'Downloads';
 
 export class DynamoDBService {
     private readonly docClient: DynamoDBDocumentClient;
@@ -139,6 +141,90 @@ export class DynamoDBService {
             return result.Items?.[0] as PackageMetricsTableItem || null;
         } catch (error) {
             log.error('Error getting metrics by version ID:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all versions of a package
+     * @param packageId The ID of the package
+     * @returns Array of package version items
+     */
+    async getPackageVersions(packageId: string): Promise<PackageVersionTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGE_VERSIONS_TABLE,
+                KeyConditionExpression: 'package_id = :packageId',
+                ExpressionAttributeValues: {
+                    ':packageId': packageId
+                }
+            }));
+
+            return result.Items as PackageVersionTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting package versions:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get a specific version of a package
+     * @param packageId The ID of the package
+     * @param version The version string
+     * @returns Package version item if found, null otherwise
+     */
+    async getPackageVersion(packageId: string, version: string): Promise<PackageVersionTableItem | null> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGE_VERSIONS_TABLE,
+                KeyConditionExpression: 'package_id = :packageId AND version = :version',
+                ExpressionAttributeValues: {
+                    ':packageId': packageId,
+                    ':version': version
+                }
+            }));
+
+            return result.Items?.[0] as PackageVersionTableItem || null;
+        } catch (error) {
+            log.error('Error getting package version:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get latest version of a package
+     * @param packageId The ID of the package
+     * @returns Latest package version item if found, null otherwise
+     */
+    async getLatestPackageVersion(packageId: string): Promise<PackageVersionTableItem | null> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGE_VERSIONS_TABLE,
+                KeyConditionExpression: 'package_id = :packageId',
+                ExpressionAttributeValues: {
+                    ':packageId': packageId
+                },
+                ScanIndexForward: false, // Sort in descending order
+                Limit: 1 // Get only the latest version
+            }));
+
+            return result.Items?.[0] as PackageVersionTableItem || null;
+        } catch (error) {
+            log.error('Error getting latest package version:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Record a package download in the downloads table
+     * @param downloadData The download data to record
+     */
+    async recordDownload(downloadData: DownloadTableItem): Promise<void> {
+        try {
+            await this.put(DOWNLOADS_TABLE, downloadData);
+            log.info(`Successfully recorded download for package ${downloadData.package_id}`);
+        } catch (error) {
+            log.error('Error recording download:', error);
             throw error;
         }
     }
