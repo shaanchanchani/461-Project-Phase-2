@@ -33,6 +33,12 @@ export class PackageUploadService {
       // Extract package info from URL
       const { name, version, description } = await this.extractPackageInfo(url);
 
+      // Check if package already exists before downloading and uploading
+      const existingPackage = await this.db.getPackageByName(name);
+      if (existingPackage) {
+        throw new Error(`Package ${name} already exists`);
+      }
+
       // Generate unique IDs
       const packageId = uuidv4();
       const versionId = uuidv4();
@@ -135,9 +141,15 @@ export class PackageUploadService {
             log.warn('No README found for description');
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         log.error('Error fetching GitHub repository info:', error);
-        throw error;
+        if (error.response?.status === 404) {
+          throw new Error('Invalid request-check file/URL and try again');
+        }
+        if (error.response?.status === 403) {
+          throw new Error('Authentication failed');
+        }
+        throw new Error('Invalid request-check file/URL and try again');
       }
     } else {
       throw new Error('Only GitHub URLs are supported at this time');
@@ -151,39 +163,22 @@ export class PackageUploadService {
     const [owner, repo] = urlObj.pathname.split('/').filter(Boolean);
 
     try {
-      // Get repository tree
-      const treeResponse = await axios.get(
-        `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
-        { headers: this.githubHeaders }
+      // Get the zipball directly from GitHub
+      const response = await axios.get(
+        `https://api.github.com/repos/${owner}/${repo}/zipball`,
+        { 
+          headers: this.githubHeaders,
+          responseType: 'arraybuffer'  // Important: we want the raw binary data
+        }
       );
 
-      const zip = new AdmZip();
-
-      // Add each file to the zip
-      for (const item of treeResponse.data.tree) {
-        if (item.type === 'blob') {
-          try {
-            const fileResponse = await axios.get(
-              `https://api.github.com/repos/${owner}/${repo}/contents/${item.path}`,
-              { headers: this.githubHeaders }
-            );
-            
-            const content = Buffer.from(fileResponse.data.content, 'base64');
-            zip.addFile(item.path, content);
-          } catch (error) {
-            log.error(`Error fetching file ${item.path}:`, error);
-            continue;
-          }
-        }
-      }
-
-      const zipBuffer = zip.toBuffer();
+      const zipBuffer = Buffer.from(response.data);
       return {
         zipBuffer,
         base64Content: zipBuffer.toString('base64')
       };
     } catch (error) {
-      log.error('Error creating package zip:', error);
+      log.error('Error downloading repository zipball:', error);
       throw error;
     }
   }

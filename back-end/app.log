@@ -1,0 +1,2 @@
+
+{"0":"POST /packages","_meta":{"runtime":"Nodejs","runtimeVersion":"v20.12.0","hostname":"Alexs-MacBook-Air.local","name":"Logger","date":"2024-12-03T08:48:17.944Z","logLevelId":3,"logLevelName":"INFO","path":{"fullFilePath":"/Users/alexpienkowski/Desktop/lock tf in/461-Project-Phase-2/back-end/src/routes.ts:19:9","fileName":"routes.ts","fileNameWithLine":"routes.ts:19","fileColumn":"9","fileLine":"19","filePath":"/src/routes.ts","filePathWithLine":"/src/routes.ts:19","method":"<anonymous>"}}}
