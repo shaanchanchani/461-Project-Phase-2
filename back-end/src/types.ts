@@ -21,6 +21,12 @@ export interface AuthenticationRequest {
 }
 
 // Package Upload Types
+export interface PackageZipUploadRequest {
+    Content: string;  // Base64 encoded zip file
+    JSProgram?: string;
+    debloat?: boolean;
+}
+
 export interface PackageUrlUploadRequest {
     URL: string;
     JSProgram?: string;

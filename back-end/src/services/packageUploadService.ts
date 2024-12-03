@@ -89,6 +89,76 @@ export class PackageUploadService {
     }
   }
 
+  public async uploadPackageFromZip(content: string, jsProgram?: string, debloat: boolean = false): Promise<PackageUploadResponse> {
+    try {
+      // Decode base64 content to buffer
+      const zipBuffer = Buffer.from(content, 'base64');
+      
+      // Extract package info from zip
+      const zip = new AdmZip(zipBuffer);
+      const packageJsonEntry = zip.getEntry('package.json');
+      if (!packageJsonEntry) {
+        throw new Error('Invalid zip file: package.json not found');
+      }
+      
+      const packageJson = JSON.parse(packageJsonEntry.getData().toString());
+      const name = packageJson.name;
+      const version = packageJson.version || '1.0.0';
+      const description = packageJson.description || '';
+
+      // Check if package already exists
+      const existingPackage = await this.db.getPackageByName(name);
+      if (existingPackage) {
+        throw new Error(`Package ${name} already exists`);
+      }
+
+      // Generate unique IDs
+      const packageId = uuidv4();
+      const versionId = uuidv4();
+
+      // Upload to S3
+      const s3Key = await this.s3Service.uploadPackageContent(packageId, zipBuffer);
+      log.info(`Uploaded package to S3 with key: ${s3Key}`);
+
+      // Create package entry in DynamoDB
+      const packageData: PackageTableItem = {
+        package_id: packageId,
+        name,
+        latest_version: version,
+        description,
+        created_at: new Date().toISOString()
+      };
+
+      // Create version entry in DynamoDB
+      const versionData: PackageVersionTableItem = {
+        version_id: versionId,
+        package_id: packageId,
+        version,
+        zip_file_path: s3Key,
+        debloated: debloat,
+        created_at: new Date().toISOString()
+      };
+
+      await this.db.createPackageEntry(packageData);
+      await this.db.createPackageVersion(versionData);
+
+      return {
+        metadata: {
+          Name: name,
+          Version: version,
+          ID: packageId
+        },
+        data: {
+          Content: content,
+          JSProgram: jsProgram || ''
+        }
+      };
+    } catch (error) {
+      log.error('Error uploading package from zip:', error);
+      throw error;
+    }
+  }
+
   private async extractPackageInfo(url: string): Promise<{ name: string; version: string; description: string }> {
     const urlObj = new URL(url);
     let name: string;

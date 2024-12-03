@@ -255,18 +255,14 @@ const PackageRegistry: React.FC = () => {
       // Refresh the package list
       await fetchPackages();
 
-      // Wait a moment to show the success message before closing
-      setTimeout(() => {
-        // Reset form
-        setUploadFormData({
-          url: '',
-          file: null,
-          uploadType: 'url',
-          JSProgram: '',
-          debloat: false
-        });
-        setUploadDialogOpen(false);
-      }, 1500); // Show success message for 1.5 seconds
+      // Reset form fields but keep dialog open
+      setUploadFormData({
+        url: '',
+        file: null,
+        uploadType: 'url',
+        JSProgram: '',
+        debloat: false
+      });
     } catch (err) {
       console.error('Upload error:', err);
       setUploadStatus({

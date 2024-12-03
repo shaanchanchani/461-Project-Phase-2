@@ -15,13 +15,20 @@ export class PackageController {
 
     public createPackage = async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const { URL: url, JSProgram, debloat } = req.body;
+            const { URL: url, Content, JSProgram, debloat } = req.body;
 
-            if (!url) {
-                return res.status(400).json({ error: 'URL is required' });
+            if (!url && !Content) {
+                return res.status(400).json({ error: 'Either URL or Content must be provided' });
             }
 
-            const result = await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat);
+            if (url && Content) {
+                return res.status(400).json({ error: 'Cannot provide both URL and Content' });
+            }
+
+            const result = url 
+                ? await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat)
+                : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat);
+
             return res.status(201).json(result);
         } catch (error) {
             if (error instanceof Error) {
