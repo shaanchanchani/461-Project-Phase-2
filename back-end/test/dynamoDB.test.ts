@@ -1,26 +1,14 @@
 import { DynamoDBService } from '../src/services/dynamoDBService';
-import { Package } from '../src/types';
-import { ScalarAttributeType, KeyType, BillingMode } from "@aws-sdk/client-dynamodb";
+import { PackageTableItem, PackageVersionTableItem } from '../src/types';
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 
 // Mock AWS SDK clients
-jest.mock('@aws-sdk/client-dynamodb', () => {
-    const actual = jest.requireActual('@aws-sdk/client-dynamodb');
-    return {
-        ...actual,
-        DynamoDBClient: jest.fn().mockImplementation(() => ({
-            send: jest.fn()
-        })),
-        CreateTableCommand: jest.fn().mockImplementation((input) => ({
-            input
-        })),
-        ListTablesCommand: jest.fn().mockImplementation((input) => ({
-            input
-        })),
-        DescribeTableCommand: jest.fn().mockImplementation((input) => ({
-            input
-        }))
-    };
-});
+jest.mock('@aws-sdk/client-dynamodb', () => ({
+    DynamoDBClient: jest.fn().mockImplementation(() => ({
+        send: jest.fn()
+    }))
+}));
 
 jest.mock('@aws-sdk/lib-dynamodb', () => ({
     DynamoDBDocumentClient: {
@@ -33,167 +21,156 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
     })),
     QueryCommand: jest.fn().mockImplementation((input) => ({
         input
-    })),
-    GetCommand: jest.fn().mockImplementation((input) => ({
-        input
     }))
 }));
 
 describe('DynamoDBService', () => {
     let service: DynamoDBService;
+    let mockDocClientSend: jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();
         service = new DynamoDBService();
+        mockDocClientSend = jest.fn();
+        (service as any).docClient.send = mockDocClientSend;
     });
 
-    describe('Table Operations', () => {
-        test('listTables should return array of table names', async () => {
-            const mockTables = ['table1', 'table2'];
-            const mockSend = jest.fn().mockResolvedValue({ TableNames: mockTables });
-            service['baseClient'].send = mockSend;
+    describe('put', () => {
+        it('should put item in table successfully', async () => {
+            const tableName = 'TestTable';
+            const item = { id: '123', name: 'test' };
+            mockDocClientSend.mockResolvedValue({});
 
-            const result = await service.listTables();
-            expect(result).toEqual(mockTables);
-            expect(mockSend).toHaveBeenCalled();
+            await service.put(tableName, item);
+
+            expect(mockDocClientSend).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: {
+                        TableName: tableName,
+                        Item: item
+                    }
+                })
+            );
         });
 
-        test('tableExists should return true when table exists', async () => {
-            const mockSend = jest.fn().mockResolvedValue({ Table: { TableName: 'packages' } });
-            service['baseClient'].send = mockSend;
+        it('should throw error when put fails', async () => {
+            const error = new Error('Put failed');
+            mockDocClientSend.mockRejectedValue(error);
 
-            const result = await service.tableExists('packages');
-            expect(result).toBe(true);
-            expect(mockSend).toHaveBeenCalled();
-        });
-
-        test('tableExists should return false when table does not exist', async () => {
-            const mockSend = jest.fn().mockRejectedValue({ name: 'ResourceNotFoundException' });
-            service['baseClient'].send = mockSend;
-
-            const result = await service.tableExists('non-existent-table');
-            expect(result).toBe(false);
-            expect(mockSend).toHaveBeenCalled();
-        });
-
-        test('createTable should create table if it does not exist', async () => {
-            const mockSend = jest.fn()
-                .mockRejectedValueOnce({ name: 'ResourceNotFoundException' }) // For tableExists check
-                .mockResolvedValueOnce({}) // For createTable
-                .mockResolvedValueOnce({ Table: { TableStatus: 'ACTIVE' } }); // For describe table status
-            service['baseClient'].send = mockSend;
-
-            await service.createTable();
-            expect(mockSend).toHaveBeenCalledTimes(3);
+            await expect(service.put('table', {})).rejects.toThrow('Put failed');
         });
     });
 
-    describe('Package Operations', () => {
-        const mockPackage: Package = {
-            metadata: {
-                Name: 'test-package',
-                Version: '1.0.0',
-                ID: '123456789abcdef'
-            },
-            data: {
-                Content: 'base64content',
-                URL: 'https://example.com/package'
-            }
+    describe('getPackageByName', () => {
+        it('should return package when found', async () => {
+            const mockPackage: PackageTableItem = {
+                package_id: '123',
+                name: 'test-package',
+                latest_version: '1.0.0',
+                description: 'Test package',
+                created_at: new Date().toISOString()
+            };
+
+            mockDocClientSend.mockResolvedValue({ Items: [mockPackage] });
+
+            const result = await service.getPackageByName('test-package');
+
+            expect(result).toEqual(mockPackage);
+            expect(mockDocClientSend).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: {
+                        TableName: 'Packages',
+                        KeyConditionExpression: '#name = :name',
+                        ExpressionAttributeNames: { '#name': 'name' },
+                        ExpressionAttributeValues: { ':name': 'test-package' }
+                    }
+                })
+            );
+        });
+
+        it('should return null when package not found', async () => {
+            mockDocClientSend.mockResolvedValue({ Items: [] });
+
+            const result = await service.getPackageByName('non-existent');
+
+            expect(result).toBeNull();
+        });
+
+        it('should throw error when query fails', async () => {
+            mockDocClientSend.mockRejectedValue(new Error('Query failed'));
+
+            await expect(service.getPackageByName('test')).rejects.toThrow('Query failed');
+        });
+    });
+
+    describe('createPackageEntry', () => {
+        const mockPackage: PackageTableItem = {
+            package_id: '123',
+            name: 'test-package',
+            latest_version: '1.0.0',
+            description: 'Test package',
+            created_at: new Date().toISOString()
         };
 
-        test('createPackage should store package correctly', async () => {
-            const mockSend = jest.fn().mockResolvedValue({});
-            service['docClient'].send = mockSend;
+        it('should create package entry when package does not exist', async () => {
+            // Mock getPackageByName to return null (package doesn't exist)
+            mockDocClientSend.mockResolvedValueOnce({ Items: [] });
+            // Mock put operation
+            mockDocClientSend.mockResolvedValueOnce({});
 
-            await service.createPackage(mockPackage);
-            
-            expect(mockSend).toHaveBeenCalled();
-            const putCommand = mockSend.mock.calls[0][0];
-            expect(putCommand.input.TableName).toBe('packages');
-            expect(putCommand.input.Item.type).toBe('package');
-            expect(putCommand.input.Item.metadata).toEqual(mockPackage.metadata);
+            await service.createPackageEntry(mockPackage);
+
+            expect(mockDocClientSend).toHaveBeenCalledTimes(2);
+            // Verify put operation
+            expect(mockDocClientSend).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    input: {
+                        TableName: 'Packages',
+                        Item: mockPackage
+                    }
+                })
+            );
         });
 
-        test('createPackage should handle duplicate package error', async () => {
-            const mockError = new Error('The conditional request failed');
-            mockError.name = 'ConditionalCheckFailedException';
-            const mockSend = jest.fn().mockRejectedValue(mockError);
-            service['docClient'].send = mockSend;
+        it('should throw error when package already exists', async () => {
+            // Mock getPackageByName to return existing package
+            mockDocClientSend.mockResolvedValueOnce({ Items: [mockPackage] });
 
-            await expect(async () => {
-                await service.createPackage(mockPackage);
-            }).rejects.toThrow(`Package ${mockPackage.metadata.Name} v${mockPackage.metadata.Version} already exists`);
-        });
-
-        test('getPackage should retrieve package by ID', async () => {
-            const mockDynamoPackage = {
-                PK: `PKG#${mockPackage.metadata.ID}`,
-                SK: 'METADATA#latest',
-                type: 'package',
-                metadata: mockPackage.metadata,
-                data: mockPackage.data,
-                createdAt: new Date().toISOString()
-            };
-
-            const mockSend = jest.fn().mockResolvedValue({ Items: [mockDynamoPackage] });
-            service['docClient'].send = mockSend;
-
-            const result = await service.getPackage(mockPackage.metadata.ID);
-            expect(result).toBeDefined();
-            expect(result?.metadata).toEqual(mockPackage.metadata);
-            expect(mockSend).toHaveBeenCalled();
-        });
-
-        test('getPackage should return null for non-existent package', async () => {
-            const mockSend = jest.fn().mockResolvedValue({ Items: [] });
-            service['docClient'].send = mockSend;
-
-            const result = await service.getPackage('non-existent-id');
-            expect(result).toBeNull();
-            expect(mockSend).toHaveBeenCalled();
-        });
-
-        test('updatePackageRating should update rating correctly', async () => {
-            const mockRating = {
-                BusFactor: 0.5,
-                Correctness: 0.8,
-                RampUp: 0.7,
-                ResponsiveMaintainer: 0.9,
-                LicenseScore: 1.0,
-                GoodPinningPractice: 0.6,
-                PullRequest: 0.8,
-                NetScore: 0.75,
-                BusFactorLatency: 100,
-                CorrectnessLatency: 200,
-                RampUpLatency: 150,
-                ResponsiveMaintainerLatency: 300,
-                LicenseScoreLatency: 50,
-                GoodPinningPracticeLatency: 250,
-                PullRequestLatency: 180,
-                NetScoreLatency: 200
-            };
-
-            const mockSend = jest.fn().mockResolvedValue({});
-            service['docClient'].send = mockSend;
-
-            await service.updatePackageRating(mockPackage.metadata.ID, mockRating);
-            
-            expect(mockSend).toHaveBeenCalled();
-            const putCommand = mockSend.mock.calls[0][0];
-            expect(putCommand.input.TableName).toBe('packages');
-            expect(putCommand.input.Item.type).toBe('rating');
-            expect(putCommand.input.Item.rating).toEqual(mockRating);
+            await expect(service.createPackageEntry(mockPackage))
+                .rejects.toThrow(`Package ${mockPackage.name} already exists`);
         });
     });
 
-    describe('Error Handling', () => {
-        test('should handle DynamoDB client errors', async () => {
-            const mockError = new Error('DynamoDB Error');
-            const mockSend = jest.fn().mockRejectedValue(mockError);
-            service['baseClient'].send = mockSend;
+    describe('createPackageVersion', () => {
+        const mockVersion: PackageVersionTableItem = {
+            version_id: 'v123',
+            package_id: '123',
+            version: '1.0.0',
+            zip_file_path: 's3://bucket/path',
+            debloated: false,
+            created_at: new Date().toISOString()
+        };
 
-            await expect(service.listTables()).rejects.toThrow('DynamoDB Error');
-            expect(mockSend).toHaveBeenCalled();
+        it('should create package version successfully', async () => {
+            mockDocClientSend.mockResolvedValue({});
+
+            await service.createPackageVersion(mockVersion);
+
+            expect(mockDocClientSend).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: {
+                        TableName: 'PackageVersions',
+                        Item: mockVersion
+                    }
+                })
+            );
+        });
+
+        it('should throw error when version creation fails', async () => {
+            mockDocClientSend.mockRejectedValue(new Error('Version creation failed'));
+
+            await expect(service.createPackageVersion(mockVersion))
+                .rejects.toThrow('Version creation failed');
         });
     });
 });

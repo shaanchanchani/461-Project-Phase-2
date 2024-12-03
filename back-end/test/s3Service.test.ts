@@ -4,15 +4,31 @@ import * as path from 'path';
 
 describe('S3Service Tests', () => {
     let s3Service: S3Service;
+    let testPackageId: string;
     
     beforeAll(() => {
         s3Service = new S3Service();
+        testPackageId = 'test-package-' + Date.now();
+    });
+
+    afterAll(async () => {
+        // Clean up any leftover test files
+        try {
+            await s3Service.deletePackageContent(testPackageId);
+        } catch (error) {
+            // Ignore errors during cleanup
+            console.log('Cleanup: No files to delete or already deleted');
+        }
+    });
+
+    beforeEach(() => {
+        // Reset the test package ID for each test to ensure isolation
+        testPackageId = 'test-package-' + Date.now();
     });
 
     it('should upload, download, and delete a test zip file', async () => {
         // Create a small test buffer (simulating a zip file)
         const testContent = Buffer.from('Test content for zip file');
-        const testPackageId = 'test-package-' + Date.now();
 
         try {
             // Test upload

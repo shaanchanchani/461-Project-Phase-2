@@ -26,24 +26,21 @@ router.put('/authenticate', asyncHandler(AuthController.authenticate));
 // All other endpoints require authentication
 router.use(authMiddleware);
 
-// BASELINE Endpoints
-router.post('/packages', asyncHandler(SearchController.listPackages));
-
-router.delete('/reset', (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user?.isAdmin) {
-        res.status(401).json({ 
-            error: 'You do not have permission to reset the registry' 
-        });
-        return;
-    }
-    packageController.resetRegistry(req, res);
-});
-
+// Package Search and List Endpoints
+router.post('/packages', asyncHandler(packageController.listPackages));
 router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
+
+// Package Retrieval Endpoints
+router.get('/package/name/:name', asyncHandler(packageController.getPackageByName));
+router.get('/package/:id', asyncHandler(packageController.getPackage));
+router.get('/package/:id/versions', asyncHandler(packageController.listPackageVersions));
+router.get('/package/:packageId/version/:version', asyncHandler(packageController.getPackageVersion));
+
+// Package Rating Endpoints
 router.get('/package/:id/rate', asyncHandler(RatingController.getRating));
 router.get('/package/:id/cost', asyncHandler(RatingController.getCost));
-router.get('/package/:id', asyncHandler(packageController.getPackage));
-router.put('/package/:id', asyncHandler(packageController.updatePackage));
+
+// Package Upload Endpoint
 router.post('/package', asyncHandler(packageController.createPackage));
 
 export default router;

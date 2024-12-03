@@ -20,6 +20,43 @@ export interface AuthenticationRequest {
     Secret: UserAuthenticationInfo;
 }
 
+// Package Upload Types
+export interface PackageUrlUploadRequest {
+    URL: string;
+    JSProgram?: string;
+    debloat?: boolean;
+}
+
+export interface PackageUploadResponse {
+    metadata: {
+        Name: string;
+        Version: string;
+        ID: string;
+    };
+    data: {
+        Content: string;
+        JSProgram?: string;
+    };
+}
+
+// DynamoDB Schema Types
+export interface PackageTableItem {
+    package_id: string;
+    name: string;
+    latest_version: string;
+    description: string;
+    created_at: string;
+}
+
+export interface PackageVersionTableItem {
+    version_id: string;
+    package_id: string;
+    version: string;
+    zip_file_path: string;
+    debloated: boolean;
+    created_at: string;
+}
+
 // Package Types
 export interface PackageMetadata {
     Name: PackageName;
@@ -99,17 +136,17 @@ export interface PackageCost {
 export type PackageAction = 'CREATE' | 'UPDATE' | 'DOWNLOAD' | 'RATE';
 
 export interface PackageHistoryEntry {
-    User: User;
-    Date: string;  // ISO-8601 datetime in UTC
-    PackageMetadata: PackageMetadata;
-    Action: PackageAction;
+    action: PackageAction;
+    timestamp: string;
+    user?: string;
+    packageId: PackageID;
 }
 
 // Database Types (if using DynamoDB)
 export namespace DB {
     export interface DynamoPackageItem {
-        PK: string;              // PKG#${ID}
-        SK: string;              // METADATA#${Version}
+        PK: string;
+        SK: string;
         type: 'package';
         metadata: PackageMetadata;
         data: PackageData;
@@ -117,24 +154,24 @@ export namespace DB {
     }
 
     export interface DynamoRatingItem {
-        PK: string;              // PKG#${ID}
-        SK: string;              // RATING#${Version}
+        PK: string;
+        SK: string;
         type: 'rating';
         rating: PackageRating;
         updatedAt: string;
     }
 
     export interface DynamoCostItem {
-        PK: string;              // PKG#${ID}
-        SK: string;              // COST#${Version}
+        PK: string;
+        SK: string;
         type: 'cost';
         costs: PackageCost;
         updatedAt: string;
     }
 
     export interface DynamoHistoryItem {
-        PK: string;              // PKG#${Name}
-        SK: string;              // HISTORY#${Timestamp}
+        PK: string;
+        SK: string;
         type: 'history';
         entry: PackageHistoryEntry;
     }
