@@ -30,8 +30,14 @@ export class PackageUploadService {
         throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo) or npm (npmjs.com/package/name) URL');
       }
 
+      // If npm URL, get the GitHub URL first
+      let githubUrl = url;
+      if (urlType === UrlType.npm) {
+        githubUrl = await this.handleNpmUrl(url);
+      }
+
       // Extract package info from URL
-      const { name, version, description } = await this.extractPackageInfo(url);
+      const { name, version, description } = await this.extractPackageInfo(githubUrl);
 
       // Check if package already exists before downloading and uploading
       const existingPackage = await this.db.getPackageByName(name);
@@ -44,7 +50,7 @@ export class PackageUploadService {
       const versionId = uuidv4();
 
       // Fetch package content and convert to base64
-      const { zipBuffer, base64Content } = await this.fetchAndZipPackage(url);
+      const { zipBuffer, base64Content } = await this.fetchAndZipPackage(githubUrl);
 
       // Upload to S3
       const s3Key = await this.s3Service.uploadPackageContent(packageId, zipBuffer);
@@ -249,6 +255,39 @@ export class PackageUploadService {
       };
     } catch (error) {
       log.error('Error downloading repository zipball:', error);
+      throw error;
+    }
+  }
+
+  private async handleNpmUrl(url: string): Promise<string> {
+    try {
+      log.info(`Fetching GitHub repository URL for npm package: ${url}`);
+      const packageName = url.split('/').pop();
+      if (!packageName) {
+        throw new Error('Invalid npm URL format');
+      }
+
+      // Fetch package metadata from npm registry
+      const npmUrl = `https://registry.npmjs.org/${packageName}`;
+      const response = await axios.get(npmUrl);
+      log.debug(`Received response from npm registry for ${packageName}`);
+
+      // Extract GitHub repository URL from package metadata
+      const repositoryUrl = response.data.repository?.url;
+
+      if (repositoryUrl) {
+        const sanitizedUrl = repositoryUrl
+          .replace("git+", "")
+          .replace(".git", "");
+        log.info(
+          `GitHub repository URL found for ${packageName}: ${sanitizedUrl}`,
+        );
+        return sanitizedUrl;
+      } else {
+        throw new Error(`GitHub repository URL not found in package metadata for ${packageName}`);
+      }
+    } catch (error) {
+      log.error(`Failed to fetch GitHub URL for npm package:`, error);
       throw error;
     }
   }
