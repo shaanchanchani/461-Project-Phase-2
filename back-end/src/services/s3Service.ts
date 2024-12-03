@@ -2,10 +2,26 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
 
+/**
+ * S3Service handles all interactions with AWS S3 for package content storage.
+ * 
+ * Required Environment Variables:
+ * - AWS_ACCESS_KEY_ID: Your AWS access key
+ * - AWS_SECRET_ACCESS_KEY: Your AWS secret key
+ * - S3_REGION: AWS region for S3 (e.g., 'us-east-1')
+ * - S3_BUCKET_NAME: 461-team6-bucket-test
+ * 
+ * File Structure:
+ * All files are stored in the format: packages/{packageId}/content.zip
+ */
 export class S3Service {
     private s3Client: S3Client;
     private bucketName: string;
 
+    /**
+     * Initializes the S3 service with credentials from environment variables.
+     * @throws Error if required environment variables are not set
+     */
     constructor() {
         if (!process.env.AWS_ACCESS_KEY_ID) {
             throw new Error('AWS_ACCESS_KEY_ID is not set in environment variables');
@@ -30,6 +46,19 @@ export class S3Service {
         this.bucketName = process.env.S3_BUCKET_NAME;
     }
 
+    /**
+     * Uploads a zip file to S3 for a specific package.
+     * @param packageId - Unique identifier for the package
+     * @param zipContent - Buffer containing the zip file content
+     * @returns Promise<string> - The S3 key where the file was stored
+     * @throws Error if upload fails
+     * 
+     * Example:
+     * ```typescript
+     * const zipBuffer = Buffer.from(...); // your zip content
+     * const key = await s3Service.uploadPackageContent('package-123', zipBuffer);
+     * ```
+     */
     async uploadPackageContent(packageId: string, zipContent: Buffer): Promise<string> {
         const key = `packages/${packageId}/content.zip`;
         
@@ -49,6 +78,18 @@ export class S3Service {
         }
     }
 
+    /**
+     * Downloads a package's zip file content from S3.
+     * @param packageId - Unique identifier for the package
+     * @returns Promise<Buffer> - The zip file content as a buffer
+     * @throws Error if the file doesn't exist or download fails
+     * 
+     * Example:
+     * ```typescript
+     * const content = await s3Service.getPackageContent('package-123');
+     * // Use content buffer...
+     * ```
+     */
     async getPackageContent(packageId: string): Promise<Buffer> {
         const key = `packages/${packageId}/content.zip`;
         
@@ -78,6 +119,19 @@ export class S3Service {
         }
     }
 
+    /**
+     * Generates a temporary signed URL for downloading a package's zip file.
+     * The URL expires in 1 hour.
+     * @param packageId - Unique identifier for the package
+     * @returns Promise<string> - Temporary signed URL for downloading the file
+     * @throws Error if URL generation fails
+     * 
+     * Example:
+     * ```typescript
+     * const url = await s3Service.getSignedDownloadUrl('package-123');
+     * // Share URL with client...
+     * ```
+     */
     async getSignedDownloadUrl(packageId: string): Promise<string> {
         const key = `packages/${packageId}/content.zip`;
         
@@ -94,6 +148,17 @@ export class S3Service {
         }
     }
 
+    /**
+     * Deletes a package's zip file from S3.
+     * @param packageId - Unique identifier for the package
+     * @returns Promise<void>
+     * @throws Error if deletion fails
+     * 
+     * Example:
+     * ```typescript
+     * await s3Service.deletePackageContent('package-123');
+     * ```
+     */
     async deletePackageContent(packageId: string): Promise<void> {
         const key = `packages/${packageId}/content.zip`;
         
