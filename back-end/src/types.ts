@@ -19,7 +19,21 @@ export interface AuthenticationRequest {
     User: User;
     Secret: UserAuthenticationInfo;
 }
+// User Types
+export interface UserTableItem {
+    user_id: string;         // UUID
+    username: string;        // Unique username
+    password_hash: string;   // Hashed password
+    role: 'admin' | 'uploader' | 'downloader';
+    group_id?: string;      // Optional UUID foreign key
+    created_at: string;     // ISO timestamp
+}
 
+// User Group Types
+export interface UserGroupTableItem {
+    group_id: string;       // UUID
+    group_name: string;     // Unique group name
+}
 // Package Upload Types
 export interface PackageZipUploadRequest {
     Content: string;  // Base64 encoded zip file
@@ -234,4 +248,12 @@ export namespace DB {
             createdAt: new Date().toISOString()
         };
     }
+}
+export interface DynamoItem {
+    PackageTableItem: PackageTableItem;
+    PackageVersionTableItem: PackageVersionTableItem;
+    PackageMetricsTableItem: PackageMetricsTableItem;
+    DownloadTableItem: DownloadTableItem;
+    UserTableItem: UserTableItem;
+    UserGroupTableItem: UserGroupTableItem;
 }

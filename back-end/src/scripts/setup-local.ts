@@ -7,10 +7,12 @@ dotenv.config();
 
 const execAsync = promisify(exec);
 
-const PACKAGES_TABLE = process.env.DYNAMODB_PACKAGES_TABLE || 'Packages';
-const PACKAGE_VERSIONS_TABLE = process.env.DYNAMODB_PACKAGE_VERSIONS_TABLE || 'PackageVersions';
-const PACKAGE_METRICS_TABLE = process.env.DYNAMODB_PACKAGE_METRICS_TABLE || 'PackageMetrics';
-const DOWNLOADS_TABLE = process.env.DYNAMODB_DOWNLOADS_TABLE || 'Downloads';
+const USERS_TABLE = 'Users';
+const USER_GROUPS_TABLE ='UserGroups';
+const PACKAGES_TABLE = 'Packages';
+const PACKAGE_VERSIONS_TABLE ='PackageVersions';
+const PACKAGE_METRICS_TABLE ='PackageMetrics';
+const DOWNLOADS_TABLE ='Downloads';
 
 const dynamodb = new DynamoDB({
     endpoint: 'http://localhost:8000',
@@ -20,7 +22,101 @@ const dynamodb = new DynamoDB({
         secretAccessKey: 'local'
     }
 });
+async function createUsersTable() {
+    try {
+        await dynamodb.createTable({
+            TableName: USERS_TABLE,
+            AttributeDefinitions: [
+                { AttributeName: 'user_id', AttributeType: 'S' },
+                { AttributeName: 'username', AttributeType: 'S' },
+                { AttributeName: 'group_id', AttributeType: 'S' }
+            ],
+            KeySchema: [
+                { AttributeName: 'user_id', KeyType: 'HASH' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'username-index',
+                    KeySchema: [
+                        { AttributeName: 'username', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                },
+                {
+                    IndexName: 'group-id-index',
+                    KeySchema: [
+                        { AttributeName: 'group_id', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
+            ],
+            ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5
+            }
+        });
+        console.log('✅ Users table created');
+    } catch (error: any) {
+        if (error.name === 'ResourceInUseException') {
+            console.log('ℹ️  Users table already exists');
+        } else {
+            throw error;
+        }
+    }
+}
 
+async function createUserGroupsTable() {
+    try {
+        await dynamodb.createTable({
+            TableName: USER_GROUPS_TABLE,
+            AttributeDefinitions: [
+                { AttributeName: 'group_id', AttributeType: 'S' },
+                { AttributeName: 'group_name', AttributeType: 'S' }
+            ],
+            KeySchema: [
+                { AttributeName: 'group_id', KeyType: 'HASH' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'group-name-index',
+                    KeySchema: [
+                        { AttributeName: 'group_name', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
+            ],
+            ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5
+            }
+        });
+        console.log('✅ User Groups table created');
+    } catch (error: any) {
+        if (error.name === 'ResourceInUseException') {
+            console.log('ℹ️  User Groups table already exists');
+        } else {
+            throw error;
+        }
+    }
+}
 async function createPackagesTable() {
     try {
         await dynamodb.createTable({
@@ -256,16 +352,14 @@ async function setupLocalDev() {
         
         // Create tables
         console.log('📝 Creating DynamoDB tables...');
+        await createUsersTable();
+        await createUserGroupsTable();
         await createPackagesTable();
         await createVersionsTable();
         await createMetricsTable();
         await createDownloadsTable();
         
         console.log('✨ Local development environment setup complete!');
-        console.log('\nYou can now:');
-        console.log('1. Access DynamoDB locally at http://localhost:8000');
-        console.log('2. Use DynamoDB Admin UI at http://localhost:8001');
-        console.log('3. Run your application with npm start\n');
         
     } catch (error) {
         console.error('❌ Error setting up local development environment:', error);

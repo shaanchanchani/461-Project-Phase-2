@@ -1,4 +1,3 @@
-// src/services/dynamoDBService.ts
 import { 
     CreateTableCommand,
     CreateTableCommandInput,
@@ -12,14 +11,16 @@ import {
     PutItemCommand,
     QueryCommand,
     DeleteItemCommand,
-    ScanCommand
+    ScanCommand,
+    BatchWriteItemCommand
 } from "@aws-sdk/client-dynamodb";
 import {
     DynamoDBDocumentClient,
     PutCommand,
     QueryCommand as QueryCommandDoc,
     GetCommand,
-    UpdateCommand
+    UpdateCommand,
+    DeleteCommand
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
 import { 
@@ -28,15 +29,36 @@ import {
     PackageTableItem,
     PackageVersionTableItem,
     PackageMetricsTableItem,
-    DownloadTableItem
+    DownloadTableItem,
+    UserTableItem,
+    UserGroupTableItem,
+    DynamoItem
 } from '../types';
+import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 
-const PACKAGES_TABLE = process.env.DYNAMODB_PACKAGES_TABLE || 'Packages';
-const PACKAGE_VERSIONS_TABLE = process.env.DYNAMODB_PACKAGE_VERSIONS_TABLE || 'PackageVersions';
-const PACKAGE_METRICS_TABLE = process.env.DYNAMODB_PACKAGE_METRICS_TABLE || 'PackageMetrics';
-const DOWNLOADS_TABLE = process.env.DYNAMODB_DOWNLOADS_TABLE || 'Downloads';
+const PACKAGES_TABLE = 'Packages';
+const PACKAGE_VERSIONS_TABLE = 'PackageVersions';
+const PACKAGE_METRICS_TABLE =  'PackageMetrics';
+const DOWNLOADS_TABLE = 'Downloads';
+const USERS_TABLE = 'Users';
+const USER_GROUPS_TABLE = 'UserGroups';
 
+/**
+ * DynamoDB Service
+ * 
+ * A service class that handles all DynamoDB operations for the package registry.
+ * This includes operations for:
+ * - User management (creation, retrieval, authentication)
+ * - User group management
+ * - Package management (creation, versioning, retrieval)
+ * - Package metrics tracking
+ * - Download tracking
+ * - Database maintenance (clearing tables, resetting state)
+ * 
+ * The service uses the AWS SDK v3 for DynamoDB and supports both standard DynamoDB
+ * and local DynamoDB for development.
+ */
 export class DynamoDBService {
     private readonly docClient: DynamoDBDocumentClient;
     private readonly baseClient: DynamoDBClient;
@@ -58,8 +80,14 @@ export class DynamoDBService {
             }
         });
     }
-
-    async put(tableName: string, item: any): Promise<void> {
+    /**
+     * Generic method to put an item into a DynamoDB table
+     * @template T - The type of item being put into the table
+     * @param tableName - Name of the DynamoDB table
+     * @param item - The item to put into the table
+     * @throws Error if the put operation fails
+     */
+    async put<T extends keyof DynamoItem>(tableName: string, item: DynamoItem[T]): Promise<void> {
         try {
             await this.docClient.send(new PutCommand({
                 TableName: tableName,
@@ -68,6 +96,166 @@ export class DynamoDBService {
             log.info(`Successfully put item in ${tableName}`);
         } catch (error) {
             log.error(`Error putting item in ${tableName}:`, error);
+            throw error;
+        }
+    }
+    /**
+     * Creates a new user in the system
+     * @param username - Unique username for the new user
+     * @param password - User's password (will be hashed before storage)
+     * @param role - User's role in the system
+     * @throws Error if username already exists or creation fails
+     */
+    async createUser(username: string, password: string, role: 'admin' | 'uploader' | 'downloader'): Promise<void> {
+        try {
+            // Check if username already exists
+            const existingUser = await this.getUserByUsername(username);
+            if (existingUser) {
+                throw new Error(`Username ${username} already exists`);
+            }
+    
+            const userData: UserTableItem = {
+                user_id: uuidv4(),
+                username,
+                password_hash: this.hashPassword(password),
+                role,
+                created_at: new Date().toISOString()
+            };
+    
+            await this.put<'UserTableItem'>(USERS_TABLE, userData);
+            log.info(`Successfully created user ${username}`);
+        } catch (error) {
+            log.error('Error creating user:', error);
+            throw error;
+        }
+    }
+    /**
+     * Hashes a password using SHA-256
+     * @param password - Plain text password to hash
+     * @returns Hashed password
+     * @private
+     */
+    private hashPassword(password: string): string {
+        return createHash('sha256').update(password).digest('hex');
+    }
+    /**
+     * Creates an admin user with elevated privileges
+     * @param username - Username for the admin
+     * @param password - Admin's password (will be hashed)
+     * @throws Error if creation fails
+     */
+    async createAdminUser(username: string, password: string): Promise<void> {
+        try {
+            await this.createUser(username, password, 'admin');
+            log.info(`Successfully created admin user ${username}`);
+        } catch (error) {
+            log.error('Error creating admin user:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Retrieves a user by their username
+     * @param username - Username to search for
+     * @returns User data if found, null otherwise
+     */
+    async getUserByUsername(username: string): Promise<UserTableItem | null> {
+        try {
+            const result = await this.docClient.send(new QueryCommandDoc({
+                TableName: USERS_TABLE,
+                IndexName: 'username-index',
+                KeyConditionExpression: 'username = :username',
+                ExpressionAttributeValues: {
+                    ':username': username
+                }
+            }));
+
+            return result.Items?.[0] as UserTableItem || null;
+        } catch (error) {
+            log.error('Error getting user by username:', error);
+            throw error;
+        }
+    }
+    /**
+     * Retrieves a user by their username
+     * @param username - Username to search for
+     * @returns User data if found, null otherwise
+     */
+    async getUserById(userId: string): Promise<UserTableItem | null> {
+        try {
+            const result = await this.docClient.send(new GetCommand({
+                TableName: USERS_TABLE,
+                Key: {
+                    user_id: userId
+                }
+            }));
+
+            return result.Item as UserTableItem || null;
+        } catch (error) {
+            log.error('Error getting user by ID:', error);
+            throw error;
+        }
+    }
+    /**
+     * Creates a new user group
+     * @param groupData - Group data including name and ID
+     * @throws Error if group name already exists
+     */
+    async createUserGroup(groupData: UserGroupTableItem): Promise<void> {
+        try {
+            const existingGroup = await this.getGroupByName(groupData.group_name);
+            if (existingGroup) {
+                throw new Error(`Group ${groupData.group_name} already exists`);
+            }
+
+            await this.put<'UserGroupTableItem'>(USER_GROUPS_TABLE, groupData);
+            log.info(`Successfully created group ${groupData.group_name}`);
+        } catch (error) {
+            log.error('Error creating group:', error);
+            throw error;
+        }
+    }
+    /**
+     * Retrieves a group by its name
+     * @param groupName - Name of the group to find
+     * @returns Group data if found, null otherwise
+     */
+    async getGroupByName(groupName: string): Promise<UserGroupTableItem | null> {
+        try {
+            const result = await this.docClient.send(new QueryCommandDoc({
+                TableName: USER_GROUPS_TABLE,
+                IndexName: 'group-name-index',
+                KeyConditionExpression: 'group_name = :groupName',
+                ExpressionAttributeValues: {
+                    ':groupName': groupName
+                }
+            }));
+
+            return result.Items?.[0] as UserGroupTableItem || null;
+        } catch (error) {
+            log.error('Error getting group by name:', error);
+            throw error;
+        }
+    }
+    /**
+     * Gets all users belonging to a specific group
+     * @param groupId - UUID of the group
+     * @returns Array of users in the group
+     */
+    async getUsersByGroupId(groupId: string): Promise<UserTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommandDoc({
+                TableName: USERS_TABLE,
+                IndexName: 'group-id-index',
+                KeyConditionExpression: 'group_id = :groupId',
+                ExpressionAttributeValues: {
+                    ':groupId': groupId
+                }
+            }));
+
+            return result.Items as UserTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting users by group ID:', error);
             throw error;
         }
     }
@@ -100,7 +288,8 @@ export class DynamoDBService {
                 throw new Error(`Package ${packageData.name} already exists`);
             }
 
-            await this.put(PACKAGES_TABLE, packageData);
+            await this.put<'PackageTableItem'>(PACKAGES_TABLE, packageData);
+            
         } catch (error) {
             log.error('Error creating package entry:', error);
             throw error;
@@ -109,7 +298,7 @@ export class DynamoDBService {
 
     async createPackageVersion(versionData: PackageVersionTableItem): Promise<void> {
         try {
-            await this.put(PACKAGE_VERSIONS_TABLE, versionData);
+            await this.put<'PackageVersionTableItem'>(PACKAGE_VERSIONS_TABLE, versionData);
         } catch (error) {
             log.error('Error creating package version:', error);
             throw error;
@@ -276,8 +465,8 @@ export class DynamoDBService {
      * @param downloadData The download data to record
      */
     async recordDownload(downloadData: DownloadTableItem): Promise<void> {
-        try {
-            await this.put(DOWNLOADS_TABLE, downloadData);
+        try {    
+            await this.put<'DownloadTableItem'>(DOWNLOADS_TABLE, downloadData);
             log.info(`Successfully recorded download for package ${downloadData.package_id}`);
         } catch (error) {
             log.error('Error recording download:', error);
@@ -302,6 +491,188 @@ export class DynamoDBService {
             log.info(`Updated latest version to ${version} for package ${packageId}`);
         } catch (error) {
             log.error('Error updating package latest version:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Clear all items from a DynamoDB table using batch operations
+     * @param tableName The name of the table to clear
+     * @returns Promise<void>
+     */
+    async clearTable(tableName: string): Promise<void> {
+        try {
+            // First check if table exists and has items
+            const scanCommand = new ScanCommand({
+                TableName: tableName,
+                Limit: 1 // Just check for at least one item
+            });
+
+            try {
+                const initialScan = await this.baseClient.send(scanCommand);
+                if (!initialScan.Items || initialScan.Items.length === 0) {
+                    log.info(`Table ${tableName} is already empty`);
+                    return;
+                }
+            } catch (error: any) {
+                if (error.name === 'ResourceNotFoundException') {
+                    log.info(`Table ${tableName} does not exist`);
+                    return;
+                }
+                throw error;
+            }
+
+            let lastEvaluatedKey: Record<string, any> | undefined;
+            let totalDeleted = 0;
+            
+            do {
+                // Get the scan parameters for the table
+                const { projectionExpression, expressionAttributeNames } = this.getScanParameters(tableName);
+                
+                // Create scan command with or without expression attribute names
+                const scanParams: any = {
+                    TableName: tableName,
+                    ExclusiveStartKey: lastEvaluatedKey,
+                    ProjectionExpression: projectionExpression,
+                };
+
+                // Only add ExpressionAttributeNames if we have any
+                if (Object.keys(expressionAttributeNames).length > 0) {
+                    scanParams.ExpressionAttributeNames = expressionAttributeNames;
+                }
+
+                const batchScanCommand = new ScanCommand(scanParams);
+                const scanResult = await this.baseClient.send(batchScanCommand);
+                
+                if (!scanResult.Items || scanResult.Items.length === 0) {
+                    break;
+                }
+
+                // Process items in batches of 25 (DynamoDB batch size limit)
+                for (let i = 0; i < scanResult.Items.length; i += 25) {
+                    const batch = scanResult.Items.slice(i, i + 25);
+                    const deleteRequests = batch.map(item => ({
+                        DeleteRequest: {
+                            Key: this.extractKeyFromItem(tableName, item)
+                        }
+                    }));
+
+                    try {
+                        await this.baseClient.send(new BatchWriteItemCommand({
+                            RequestItems: {
+                                [tableName]: deleteRequests
+                            }
+                        }));
+                        totalDeleted += batch.length;
+                    } catch (error: any) {
+                        if (error.name === 'ResourceNotFoundException') {
+                            log.info(`Table ${tableName} was deleted during cleanup`);
+                            return;
+                        }
+                        throw error;
+                    }
+                }
+
+                lastEvaluatedKey = scanResult.LastEvaluatedKey;
+            } while (lastEvaluatedKey);
+
+            log.info(`Successfully cleared table ${tableName} (${totalDeleted} items deleted)`);
+        } catch (error) {
+            log.error(`Error clearing table ${tableName}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get scan parameters for a table, including projection expression and attribute names
+     * @param tableName The name of the table
+     * @returns Object containing projection expression and expression attribute names
+     */
+    private getScanParameters(tableName: string): { 
+        projectionExpression: string; 
+        expressionAttributeNames: Record<string, string>;
+    } {
+        switch (tableName) {
+            case PACKAGES_TABLE:
+                return {
+                    projectionExpression: '#n',
+                    expressionAttributeNames: { '#n': 'name' }
+                };
+            case PACKAGE_VERSIONS_TABLE:
+                return {
+                    projectionExpression: 'package_id, #v',
+                    expressionAttributeNames: { '#v': 'version' }
+                };
+            case PACKAGE_METRICS_TABLE:
+                return {
+                    projectionExpression: 'metric_id',
+                    expressionAttributeNames: {} // Empty object, will be omitted in scan params
+                };
+            case DOWNLOADS_TABLE:
+                return {
+                    projectionExpression: 'download_id',
+                    expressionAttributeNames: {} // Empty object, will be omitted in scan params
+                };
+            case USERS_TABLE:
+                return {
+                    projectionExpression: 'user_id',
+                    expressionAttributeNames: {}
+                };
+            case USER_GROUPS_TABLE:
+                return {
+                    projectionExpression: 'group_id',
+                    expressionAttributeNames: {}
+                };
+            default:
+                throw new Error(`Unknown table: ${tableName}`);
+        }
+    }
+
+    /**
+     * Extract the key attributes from a DynamoDB item based on the table
+     * @param tableName The name of the table
+     * @param item The DynamoDB item
+     * @returns Record<string, any> The key attributes
+     */
+    private extractKeyFromItem(tableName: string, item: Record<string, any>): Record<string, any> {
+        switch (tableName) {
+            case PACKAGES_TABLE:
+                return { name: item.name };
+            case PACKAGE_VERSIONS_TABLE:
+                return { 
+                    package_id: item.package_id,
+                    version: item.version 
+                };
+            case PACKAGE_METRICS_TABLE:
+                return { metric_id: item.metric_id };
+            case DOWNLOADS_TABLE:
+                return { download_id: item.download_id };    
+            case USERS_TABLE:
+                return { user_id: item.user_id };
+            case USER_GROUPS_TABLE:
+                return { group_id: item.group_id };
+            default:
+                throw new Error(`Unknown table: ${tableName}`);
+        }
+    }
+
+    /**
+     * Clear all tables in the system
+     * @returns Promise<void>
+     */
+    async clearAllTables(): Promise<void> {
+        try {
+            await Promise.all([
+                this.clearTable(PACKAGES_TABLE),
+                this.clearTable(PACKAGE_VERSIONS_TABLE),
+                this.clearTable(PACKAGE_METRICS_TABLE),
+                this.clearTable(DOWNLOADS_TABLE),
+                this.clearTable(USERS_TABLE),
+                this.clearTable(USER_GROUPS_TABLE)
+            ]);
+            log.info('Successfully cleared all tables');
+        } catch (error) {
+            log.error('Error clearing all tables:', error);
             throw error;
         }
     }

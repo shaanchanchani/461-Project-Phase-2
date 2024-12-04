@@ -50,7 +50,7 @@ export class ResetService {
 
             // Step 3: Restore default admin user
             log.info('Restoring default admin user...');
-            await this.db.put(PACKAGES_TABLE, DEFAULT_ADMIN_USER);
+            await this.db.createAdminUser(DEFAULT_ADMIN_USER.name, DEFAULT_ADMIN_USER.password);
 
             log.info('Registry reset completed successfully');
         } catch (error) {
@@ -59,6 +59,5 @@ export class ResetService {
         }
     }
 }
-
 // Initialize with default services
 export const resetService = new ResetService();
