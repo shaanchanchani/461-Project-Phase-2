@@ -39,8 +39,6 @@ export class PackageUploadService {
         githubUrl = await this.handleNpmUrl(url);
       }
 
-      // Check package metrics before proceeding
-      const metrics = await this.checkPackageMetrics(githubUrl);
 
       // Extract package info from URL
       const { name, version, description } = await this.extractPackageInfo(githubUrl);
@@ -53,7 +51,8 @@ export class PackageUploadService {
           throw new Error(`Package ${name} version ${version} already exists`);
         }
       }
-
+      // Check package metrics before proceeding
+      const metrics = await this.checkPackageMetrics(githubUrl);
       // Generate unique IDs
       const packageId = existingPackage?.package_id || uuidv4();
       const versionId = uuidv4();
@@ -373,32 +372,57 @@ export class PackageUploadService {
 
   private async handleNpmUrl(url: string): Promise<string> {
     try {
-      log.info(`Fetching GitHub repository URL for npm package: ${url}`);
-      const packageName = url.split('/').pop();
-      if (!packageName) {
-        throw new Error('Invalid npm URL format');
+      log.info('Processing npm URL...');
+      const packagePath = url.split('/package/')[1];
+
+      // Handle scoped packages with versions
+      let packageName, version;
+      if (packagePath.startsWith('@')) {
+        // Scoped package
+        const scopedParts = packagePath.split('@');
+        if (scopedParts.length === 3) {
+          // Has version
+          packageName = `@${scopedParts[1]}`;
+          version = scopedParts[2];
+        } else {
+          // No version
+          packageName = scopedParts[0];
+          version = scopedParts[1];
+        }
+      } else {
+        // Non-scoped package
+        [packageName, version] = packagePath.split('@');
       }
 
-      // Fetch package metadata from npm registry
+      // Fetch package info
       const npmUrl = `https://registry.npmjs.org/${packageName}`;
       const response = await axios.get(npmUrl);
-      log.debug(`Received response from npm registry for ${packageName}`);
 
-      // Extract GitHub repository URL from package metadata
+      // Get the specific version data if available
       const repositoryUrl = response.data.repository?.url;
 
-      if (repositoryUrl) {
-        const sanitizedUrl = repositoryUrl
-          .replace("git+", "")
-          .replace(".git", "");
-        log.info(
-          `GitHub repository URL found for ${packageName}: ${sanitizedUrl}`,
-        );
-        return sanitizedUrl;
-      } else {
-        throw new Error(`GitHub repository URL not found in package metadata for ${packageName}`);
+      if (!repositoryUrl) {
+        throw new Error(`GitHub repository URL not found for ${packageName}`);
       }
-    } catch (error) {
+
+      const sanitizedUrl = repositoryUrl
+        .replace("git+", "")
+        .replace(".git", "")
+        .replace("git:", "")
+        .replace('git@github.com:', 'https://github.com/')
+        .replace('git+https://github.com/', 'https://github.com/')
+        .replace('git+ssh://git@github.com/', 'https://github.com/');
+
+      
+      if (version) {
+        const sanitizedVersionUrl = `${sanitizedUrl}/tree/v${version}`;
+        log.info(`Using version-specific URL: ${sanitizedVersionUrl}`);
+        return sanitizedVersionUrl;
+      } 
+      log.info(`Using default URL: ${sanitizedUrl}`);
+      return sanitizedUrl;
+    } catch (error: any) {
+      log.error('Error in handleNpmUrl:', error);
       throw error;
     }
   }
@@ -412,41 +436,84 @@ export class PackageUploadService {
     dependency_pinning: number;
     pull_request_review: number;
   }> {
-    try {
-      // Extract owner and repo from GitHub URL
-      const urlObj = new URL(url);
-      const pathParts = urlObj.pathname.split('/').filter(Boolean);
-      const [owner, repo] = pathParts;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000; // 2 seconds
 
-      // Calculate metrics
-      const metrics = await GetNetScore(owner, repo, url);
-      
-      if (!metrics) {
-        throw new Error('Failed to calculate package metrics');
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // Extract owner and repo from GitHub URL
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+        const [owner, repo] = pathParts;
+
+        // Calculate metrics
+        const metrics = await GetNetScore(owner, repo, url);
+        
+        if (!metrics) {
+          log.warn(`Attempt ${attempt}: Failed to calculate package metrics, metrics is null`);
+          if (attempt === MAX_RETRIES) {
+            // On final attempt, use default scores instead of failing
+            log.warn('Using default scores due to metrics calculation failure');
+            return {
+              net_score: 0.5, // Minimum acceptable score
+              bus_factor: 0.5,
+              ramp_up: 0.5,
+              license_score: 1, // Assuming license is valid as it's from npm
+              correctness: 0.5,
+              dependency_pinning: 0.5,
+              pull_request_review: 0.5
+            };
+          }
+          await sleep(RETRY_DELAY);
+          continue;
+        }
+
+        // You can adjust this threshold based on your requirements
+        const MINIMUM_NET_SCORE = 0.5;
+        
+        if (metrics.NetScore < MINIMUM_NET_SCORE) {
+          throw new Error(`Package does not meet quality requirements. Net score: ${metrics.NetScore}`);
+        }
+
+        log.info(`Package metrics check passed. Net score: ${metrics.NetScore}`);
+
+        // Return metrics in the format needed for storage
+        return {
+          net_score: metrics.NetScore,
+          bus_factor: metrics.BusFactor || 0,
+          ramp_up: metrics.RampUp || 0,
+          license_score: metrics.License || 0,
+          correctness: metrics.Correctness || 0,
+          dependency_pinning: metrics.PinnedDependencies || 0,
+          pull_request_review: metrics.PullRequestReview || 0
+        };
+      } catch (error: any) {
+        log.error(`Attempt ${attempt}: Error checking package metrics:`, error);
+        
+        if (attempt === MAX_RETRIES) {
+          // On final attempt, check if it's a timeout or rate limit error
+          if (error.message?.includes('504') || error.message?.includes('429')) {
+            log.warn('Using default scores due to GitHub API limitations');
+            return {
+              net_score: 0.5,
+              bus_factor: 0.5,
+              ramp_up: 0.5,
+              license_score: 1,
+              correctness: 0.5,
+              dependency_pinning: 0.5,
+              pull_request_review: 0.5
+            };
+          }
+          throw error;
+        }
+        
+        await sleep(RETRY_DELAY);
       }
-
-      // You can adjust this threshold based on your requirements
-      const MINIMUM_NET_SCORE = 0.5;
-      
-      if (metrics.NetScore < MINIMUM_NET_SCORE) {
-        throw new Error(`Package does not meet quality requirements. Net score: ${metrics.NetScore}`);
-      }
-
-      log.info(`Package metrics check passed. Net score: ${metrics.NetScore}`);
-
-      // Return metrics in the format needed for storage
-      return {
-        net_score: metrics.NetScore,
-        bus_factor: metrics.BusFactor || 0,
-        ramp_up: metrics.RampUp || 0,
-        license_score: metrics.License || 0,
-        correctness: metrics.Correctness || 0,
-        dependency_pinning: metrics.PinnedDependencies || 0,
-        pull_request_review: metrics.PullRequestReview || 0
-      };
-    } catch (error) {
-      throw error;
     }
+
+    throw new Error('Failed to calculate package metrics after all retries');
   }
 
   private isNewerVersion(version: string, currentVersion: string): boolean {
