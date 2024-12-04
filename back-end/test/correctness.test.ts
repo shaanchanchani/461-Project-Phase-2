@@ -54,6 +54,8 @@ describe("calculateCorrectness with almost complete repository", () => {
         { name: "Bob", total: 30 },
         { name: "Charlie", total: 20 },
       ],
+      pullRequests: [],
+      files: []
     };
   });
 

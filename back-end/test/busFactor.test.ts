@@ -26,6 +26,8 @@ describe("calculateBusFactor", () => {
         { name: "Bob", total: 30 },
         { name: "Charlie", total: 20 },
       ],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateBusFactor(metrics);
@@ -45,6 +47,8 @@ describe("calculateBusFactor", () => {
       commitsData: ["commitsData"],
       issuesData: ["1", "2", "3"],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateBusFactor(metrics);
@@ -62,6 +66,8 @@ describe("calculateBusFactor", () => {
       commitsData: ["commitsData"],
       issuesData: ["1", "2", "3"],
       contributorsData: [{ name: "Alice", total: 50 }],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateBusFactor(metrics);
@@ -82,6 +88,8 @@ describe("calculateBusFactor", () => {
         { author: { login: "alice" }, total: 0 },
         { author: { login: "bob" }, total: 0 },
       ],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateBusFactor(metrics);

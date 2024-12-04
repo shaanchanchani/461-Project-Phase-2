@@ -25,6 +25,8 @@ describe("calculateResponsiveness", () => {
       commitsData: [],
       issuesData: [],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateResponsiveness(metrics);
@@ -47,6 +49,8 @@ describe("calculateResponsiveness", () => {
       ],
       issuesData: [],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateResponsiveness(metrics);
@@ -82,6 +86,8 @@ describe("calculateResponsiveness", () => {
         },
       ],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateResponsiveness(metrics);
@@ -117,6 +123,8 @@ describe("calculateResponsiveness", () => {
         },
       ],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateResponsiveness(metrics);
@@ -203,6 +211,8 @@ describe("calculateResponsiveness", () => {
         },
       ],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateResponsiveness(metrics);
@@ -241,6 +251,8 @@ describe("calculateResponsiveness", () => {
         },
       ],
       contributorsData: [],
+      pullRequests: [],
+      files: []
     };
 
     const result = calculateResponsiveness(metrics);

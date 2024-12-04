@@ -340,8 +340,8 @@ export class PackageUploadService {
         ramp_up: metrics.RampUp || 0,
         license_score: metrics.License || 0,
         correctness: metrics.Correctness || 0,
-        dependency_pinning: 0.5, // Temporarily set to 0.5 until implementation
-        pull_request_review: 0.5  // Temporarily set to 0.5 until implementation
+        dependency_pinning: metrics.PinnedDependencies || 0,
+        pull_request_review: metrics.PullRequestReview || 0
       };
     } catch (error) {
       log.error('Package metrics check failed:', error);

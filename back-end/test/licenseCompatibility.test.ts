@@ -39,7 +39,7 @@ describe("calculateLicenseCompatibility", () => {
 
   testCases.forEach(({ license, expectedScore, description }) => {
     it(`should return ${expectedScore} for ${description}`, () => {
-      const repoDetails = {
+      const repoDetails: RepoDetails = {
         license,
         owner: "",
         repo: "",
@@ -50,7 +50,9 @@ describe("calculateLicenseCompatibility", () => {
         commitsData: [],
         issuesData: [],
         contributorsData: [],
-      } as RepoDetails;
+        pullRequests: [],
+        files: []
+      };
 
       const score = calculateLicenseCompatibility(repoDetails);
       if (license === 'Apache-2.0') {
@@ -81,6 +83,8 @@ describe("calculateLicenseCompatibility", () => {
         commitsData: [],
         issuesData: [],
         contributorsData: [],
+        pullRequests: [],
+        files: []
       };
 
       const score = calculateLicenseCompatibility(repoDetails);
@@ -108,6 +112,8 @@ describe("calculateLicenseCompatibility", () => {
         commitsData: [],
         issuesData: [],
         contributorsData: [],
+        pullRequests: [],
+        files: []
       };
 
       const score = calculateLicenseCompatibility(repoDetails);

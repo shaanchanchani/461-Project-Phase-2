@@ -89,9 +89,44 @@ describe("GetNetScore", () => {
       openIssues: 0,
       forks: 0,
       license: "MIT",
-      commitsData: [],
-      issuesData: [],
-      contributorsData: [],
+      commitsData: [
+        {
+          commit: {
+            author: {
+              date: new Date().toISOString(),
+            },
+          },
+        },
+      ],
+      issuesData: [
+        {
+          created_at: new Date().toISOString(),
+          state: "closed",
+          closed_at: new Date().toISOString(),
+        },
+      ],
+      contributorsData: [
+        { contributions: 100 },
+        { contributions: 50 },
+      ],
+      pullRequests: [
+        {
+          number: 1,
+          reviews: [
+            { id: 1, user: { login: 'reviewer1' } }
+          ]
+        }
+      ],
+      files: [
+        {
+          path: 'package.json',
+          content: JSON.stringify({
+            dependencies: {
+              "test": "1.2.3"
+            }
+          })
+        }
+      ]
     };
     (getGithubInfo as jest.Mock).mockResolvedValue(metrics);
     // Mock metric calculations with latency

@@ -34,6 +34,8 @@ export interface RepoDetails {
   commitsData: any[];
   issuesData: any[];
   contributorsData: any[];
+  pullRequests: any[];
+  files: any[];
 }
 
 // Map of license names to their full names
@@ -93,9 +95,11 @@ async function getGithubInfo(
   const startDate = twelveMonthsAgo;
 
   // Fetch data in parallel where possible
-  const [repoData, contributorsData] = await Promise.all([
+  const [repoData, contributorsData, pullRequests, files] = await Promise.all([
     limiter.schedule(() => _fetchRepoData(owner, repo)),
-    limiter.schedule(() => _fetchContributors(owner, repo))
+    limiter.schedule(() => _fetchContributors(owner, repo)),
+    limiter.schedule(() => _fetchPullRequests(owner, repo)),
+    limiter.schedule(() => _fetchFiles(owner, repo)),
   ]);
 
   // Fetch license after repo data since it might need it
@@ -145,6 +149,8 @@ async function getGithubInfo(
     commitsData: allCommits,
     issuesData: allIssues,
     contributorsData: contributorsData,
+    pullRequests: pullRequests,
+    files: files,
   };
   log.debug(`Repository details for ${owner}/${repo}:`, repoDetails);
 
@@ -227,6 +233,51 @@ async function _fetchLicense(
   }
 
   return license;
+}
+
+/*
+  Function Name: _fetchFiles
+  Description: This function fetches repository files and their contents
+  @params: owner: string - the owner of the repository
+  @params: repo: string - the name of the repository
+  @returns: Promise<any[]> - the list of files with their contents
+*/
+async function _fetchFiles(owner: string, repo: string): Promise<any[]> {
+  try {
+    // Get the repository contents
+    const contentsResponse = await axios.get(
+      `${GITHUB_API_URL}/${owner}/${repo}/contents`,
+      {
+        headers: {
+          Authorization: `token ${process.env.GITHUB_TOKEN}`,
+        },
+      },
+    );
+
+    // Find package files
+    const packageFiles = contentsResponse.data.filter((file: any) =>
+      file.name === 'package.json' || file.name === 'package-lock.json'
+    );
+
+    // Fetch content for each package file
+    const files = await Promise.all(
+      packageFiles.map(async (file: any) => {
+        const contentResponse = await axios.get(file.url, {
+          headers: {
+            Authorization: `token ${process.env.GITHUB_TOKEN}`,
+          },
+        });
+        return {
+          path: file.name,
+          content: Buffer.from(contentResponse.data.content, 'base64').toString('utf-8'),
+        };
+      })
+    );
+
+    return files;
+  } catch (error) {
+    return _handleError(error, `Failed to fetch files for ${owner}/${repo}`);
+  }
 }
 
 /*
@@ -327,6 +378,53 @@ async function _fetchContributors(owner: string, repo: string): Promise<any> {
     return response.data || []; // Return just the data array, or empty array if no data
   } catch (error) {
     return _handleError(error, `Failed to fetch contributors for ${owner}/${repo}`);
+  }
+}
+
+/*
+  Function Name: _fetchPullRequests
+  Description: This function fetches pull requests and their reviews for a repository
+  @params: owner: string - the owner of the repository
+  @params: repo: string - the name of the repository
+  @returns: Promise<any[]> - the list of pull requests with their reviews
+*/
+async function _fetchPullRequests(owner: string, repo: string): Promise<any[]> {
+  try {
+    // Fetch closed pull requests
+    const pullsResponse = await axios.get(
+      `${GITHUB_API_URL}/${owner}/${repo}/pulls`,
+      {
+        params: {
+          state: "closed",
+          per_page: 100,
+        },
+        headers: {
+          Authorization: `token ${process.env.GITHUB_TOKEN}`,
+        },
+      },
+    );
+
+    // For each PR, fetch its reviews
+    const pullRequests = await Promise.all(
+      pullsResponse.data.map(async (pr: any) => {
+        const reviewsResponse = await axios.get(
+          `${GITHUB_API_URL}/${owner}/${repo}/pulls/${pr.number}/reviews`,
+          {
+            headers: {
+              Authorization: `token ${process.env.GITHUB_TOKEN}`,
+            },
+          },
+        );
+        return {
+          ...pr,
+          reviews: reviewsResponse.data,
+        };
+      })
+    );
+
+    return pullRequests;
+  } catch (error) {
+    return _handleError(error, `Failed to fetch pull requests for ${owner}/${repo}`);
   }
 }
 
@@ -490,5 +588,7 @@ export {
   _fetchLatestCommits,
   _fetchLatestIssues,
   _fetchContributors,
+  _fetchPullRequests,
+  _fetchFiles,
   _handleError,
 };

@@ -5,6 +5,8 @@ import { calculateResponsiveness } from "./responsiveness";
 import { calculateLicenseCompatibility } from "./licenseCompatibility";
 import { calculateBusFactor } from "./busFactor";
 import { calculateCorrectness } from "./correctness";
+import { calculatePinnedDependenciesMetric } from "./pinnedDependencies";
+import { calculatePullRequestMetric } from "./reviewPullReqs";
 import { cloneRepo, removeRepo } from "./clone_repo";
 import * as fs from "fs";
 import { log } from "../logger";
@@ -30,8 +32,9 @@ export async function measureLatency<T, A extends any[]>(
 
 /*
   Function Name: GetNetScore
-  Description: Retrieves various metrics (RampUp Time, Responsiveness, License Compatibility, Bus Factor, Correctness) for a GitHub repository, 
-               calculates the NetScore based on these metrics, and measures the time taken for each metric.
+  Description: Retrieves various metrics (RampUp Time, Responsiveness, License Compatibility, Bus Factor, Correctness,
+               Pinned Dependencies, Pull Request Reviews) for a GitHub repository, calculates the NetScore based on these metrics,
+               and measures the time taken for each metric.
   @params: 
     - owner: string - The owner of the repository.
     - repo: string - The name of the repository.
@@ -63,6 +66,7 @@ export async function GetNetScore(
     let clone_time = (new Date().getTime() - start_clone) / 1000;
     log.info(`Repository cloned to ${clonedPath}. Clone time: ${clone_time}s`);
     log.info(`Calculating repository metrics...`);
+    
     const [rampUpTime, responsiveness] = await Promise.all([
       measureLatency(calculateRampUpTime, gitInfo, clonedPath),
       measureLatency(calculateResponsiveness, gitInfo),
@@ -75,6 +79,11 @@ export async function GetNetScore(
         measureLatency(calculateCorrectness, gitInfo, clonedPath),
       ]);
 
+    const [pinnedDependencies, pullRequestReview] = await Promise.all([
+      measureLatency(calculatePinnedDependenciesMetric, gitInfo),
+      measureLatency(calculatePullRequestMetric, gitInfo),
+    ]);
+
     log.info(`Removing cloned repository from ${clonedPath}`);
     const removeResult = await removeRepo(clonedPath);
     if (!removeResult) {
@@ -84,11 +93,13 @@ export async function GetNetScore(
 
     log.info(`Calculating final NetScore...`);
     const NetScore =
-      0.2 * correctnessScore.value +
-      0.2 * busFactor.value +
+      0.15 * correctnessScore.value +
+      0.15 * busFactor.value +
       0.1 * licenseCompatibility.value +
-      0.3 * responsiveness.value +
-      0.2 * rampUpTime.value;
+      0.2 * responsiveness.value +
+      0.15 * rampUpTime.value +
+      0.15 * pinnedDependencies.value +
+      0.1 * pullRequestReview.value;
 
     let net_time = (new Date().getTime() - start) / 1000;
     log.info(
@@ -117,11 +128,18 @@ export async function GetNetScore(
       License_Latency: parseFloat(
         (licenseCompatibility.latency + api_time).toFixed(3),
       ),
+      PinnedDependencies: parseFloat(pinnedDependencies.value.toFixed(3)),
+      PinnedDependencies_Latency: parseFloat(
+        (pinnedDependencies.latency + api_time).toFixed(3),
+      ),
+      PullRequestReview: parseFloat(pullRequestReview.value.toFixed(3)),
+      PullRequestReview_Latency: parseFloat(
+        (pullRequestReview.latency + api_time).toFixed(3),
+      ),
     };
   } catch (error) {
     console.error(`GetNetScore: Failed to calculate metrics for ${url}`, error);
     return null;
-    //do we exit here?
   } finally {
     if (dir && fs.existsSync(dir)) {
       log.info(`Cleaning up: Removing directory ${dir}`);
