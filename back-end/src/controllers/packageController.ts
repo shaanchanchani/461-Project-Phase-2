@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { PackageService } from '../services/packageService';
 import { PackageUploadService } from '../services/packageUploadService';
 import { PackageDownloadService } from '../services/packageDownloadService';
+import { ResetService } from '../services/resetService';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { log } from '../logger';
 
@@ -9,15 +10,18 @@ export class PackageController {
     private packageService: PackageService;
     private packageUploadService: PackageUploadService;
     private packageDownloadService: PackageDownloadService;
+    private resetService: ResetService;
 
     constructor(
         packageService?: PackageService,
         packageUploadService?: PackageUploadService,
-        packageDownloadService?: PackageDownloadService
+        packageDownloadService?: PackageDownloadService,
+        resetService?: ResetService
     ) {
         this.packageService = packageService || new PackageService();
         this.packageUploadService = packageUploadService || new PackageUploadService();
         this.packageDownloadService = packageDownloadService || new PackageDownloadService();
+        this.resetService = resetService || new ResetService();
     }
 
     public createPackage = async (req: AuthenticatedRequest, res: Response) => {
@@ -119,6 +123,30 @@ export class PackageController {
         } catch (error) {
             log.error('Error listing package versions:', error);
             res.status(500).json({ error: 'Failed to list package versions' });
+        }
+    }
+
+    public resetRegistry = async (req: AuthenticatedRequest, res: Response) => {
+        try {
+            if (!req.user?.isAdmin) {
+                return res.status(401).json({
+                    error: "Unauthorized",
+                    message: "You do not have permission to reset the registry"
+                });
+            }
+
+            await this.resetService.resetRegistry();
+
+            return res.status(200).json({
+                status: "success",
+                message: "Registry reset to default state"
+            });
+        } catch (error) {
+            log.error('Error in resetRegistry:', error);
+            return res.status(500).json({
+                error: "Internal Server Error",
+                message: "Failed to reset registry"
+            });
         }
     }
 }
