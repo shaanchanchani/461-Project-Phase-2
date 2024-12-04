@@ -20,5 +20,5 @@ docker/dynamodb/
 .aider*
 
 #ignore .txt files
-*.txt
+#*.txt
 testpackages

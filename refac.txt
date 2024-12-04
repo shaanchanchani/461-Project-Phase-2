@@ -1,0 +1,74 @@
+1. Accept user input
+    -either file upload(zip) or url
+    -option debloat flag
+    -option JSProgram flag
+2. Validate user input
+    if zip file:
+        -validate file format
+        -validate file size
+        -ensure its a valid npm package in zip
+    if url:
+        -check url format
+
+3. Request to backend
+    if zip file:
+        -base64 encode zip file
+        request format:
+        ```json
+        {
+            "Content": "base64_encoded_zip_content",
+            "JSProgram": "string",  
+            "debloat": boolean
+        }
+    if url:
+        request format:
+        ```json
+        {
+            "URL": "package_url",
+            "JSProgram": "string",
+            "debloat": boolean
+        }
+4. Error handling
+    -400: Show "Invalid request-check file/URL and try again"
+    -403: Show "Authentication failed"
+    -409: Show "Package already exists"
+    -424: Show "Package failed quality requirements"
+
+Backend Details::
+	-Backend should validate the package based on the errors above if
+ 	 any exist we should return an error response so the front end can handle
+	- If the package is valid I want to store the package base 64 encoded zip in S3 
+	- If the package is valid I also want to store the package info in dynamoDB
+Dynamo DB Package Schema Table
+	Packages Table
+		1.package id : type:UUID Primary key 
+		2.name (VarChar(100): Stores the package name
+		4.Latest version VArchar(20) 
+		3.description(TEXT): Contains the package description, which comes from readme
+		4.upload_user_idL UUID
+		5.created_at(TIMESTAMP): Records when the package was initially uploaded
+	Package Versions Table
+		1.version id: UUID: primary key for the version
+		2.package id: UUID(FK) foreign ket to the package
+		3.version varchar(20)
+		4.Zip_file_path (TEXT) Path to the zip file(s3)
+		5.debloated (BOOLEAN) whether debating was applied(for now don't implement debloat logic only mark if it was applied in request)
+		6.created_at
+		7.(to add not now) dependencies
+	
+
+5. Response Format on success (201)
+  ```json
+  {
+    "metadata": {
+      "Name": "string",
+      "Version": "string", 
+      "ID": "string"
+    },
+    "data": {
+      "Content": "base64_encoded_content",
+      "JSProgram": "string"
+    }
+  }
+
+6. Front end deals with error responses and displays to user or displays success message 
