@@ -27,9 +27,10 @@ export class PackageUploadService {
   public async uploadPackageFromUrl(url: string, jsProgram?: string, debloat: boolean = false, userId?: string): Promise<PackageUploadResponse> {
     try {
       // Validate URL
+      this.validateUrl(url);
       const urlType = checkUrlType(url);
       if (urlType === UrlType.Invalid) {
-        throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo) or npm (npmjs.com/package/name) URL');
+        throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo or github.com/owner/repo/tree/version) or npm (npmjs.com/package/name) URL');
       }
 
       // If npm URL, get the GitHub URL first
@@ -99,7 +100,6 @@ export class PackageUploadService {
         }
       };
     } catch (error) {
-      log.error('Error uploading package:', error);
       throw error;
     }
   }
@@ -170,8 +170,14 @@ export class PackageUploadService {
         }
       };
     } catch (error) {
-      log.error('Error uploading package from zip:', error);
       throw error;
+    }
+  }
+
+  private validateUrl(url: string): void {
+    const urlObj = new URL(url);
+    if (urlObj.hostname !== 'github.com' && urlObj.hostname !== 'www.npmjs.com') {
+      throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo or github.com/owner/repo/tree/version) or npm (npmjs.com/package/name) URL');
     }
   }
 
@@ -180,62 +186,110 @@ export class PackageUploadService {
     let name: string;
     let version: string = '1.0.0';
     let description: string = '';
+    let ref: string | undefined;
 
     if (urlObj.hostname === 'github.com') {
       const pathParts = urlObj.pathname.split('/').filter(Boolean);
-      if (pathParts.length !== 2) {
-        throw new Error('GitHub URL must be in format: github.com/owner/repo');
-      }
-      const [owner, repo] = pathParts;
       
-      try {
-        // Get repository info
-        const repoResponse = await axios.get(
-          `https://api.github.com/repos/${owner}/${repo}`,
-          { headers: this.githubHeaders }
-        );
+      // Handle version in URL if present
+      if (pathParts.length >= 4 && pathParts[2] === 'tree') {
+        ref = pathParts[3];
+        version = ref.replace(/^v/, ''); // Remove 'v' prefix if present
+        const [owner, repo] = pathParts;
         
-        name = repo;
-        description = repoResponse.data.description || '';
-
-        // Try to get package.json for version
         try {
-          const packageJsonResponse = await axios.get(
-            `https://api.github.com/repos/${owner}/${repo}/contents/package.json`,
+          // Get repository info
+          const repoResponse = await axios.get(
+            `https://api.github.com/repos/${owner}/${repo}`,
             { headers: this.githubHeaders }
           );
           
-          const content = Buffer.from(packageJsonResponse.data.content, 'base64').toString();
-          const packageJson = JSON.parse(content);
-          version = packageJson.version || '1.0.0';
-          name = packageJson.name || repo;
-          description = packageJson.description || description;
-        } catch (error) {
-          log.warn('No package.json found, using default version');
-        }
+          name = repo;
+          description = repoResponse.data.description || '';
 
-        // If no description yet, try README
-        if (!description) {
+          // Try to get package.json from specific version
           try {
-            const readmeResponse = await axios.get(
-              `https://api.github.com/repos/${owner}/${repo}/readme`,
-              { headers: this.githubHeaders }
-            );
-            const readme = Buffer.from(readmeResponse.data.content, 'base64').toString();
-            description = readme.split('\n')[0] || '';
+            const packageJsonUrl = `https://api.github.com/repos/${owner}/${repo}/contents/package.json${ref ? `?ref=${ref}` : ''}`;
+            const packageJsonResponse = await axios.get(packageJsonUrl, { headers: this.githubHeaders });
+            
+            const content = Buffer.from(packageJsonResponse.data.content, 'base64').toString();
+            const packageJson = JSON.parse(content);
+            name = packageJson.name || repo;
+            description = packageJson.description || description;
           } catch (error) {
-            log.warn('No README found for description');
+            // Just continue if package.json not found
           }
-        }
-      } catch (error: any) {
-        log.error('Error fetching GitHub repository info:', error);
-        if (error.response?.status === 404) {
+
+          // If no description yet, try README from specific version
+          if (!description) {
+            try {
+              const readmeUrl = `https://api.github.com/repos/${owner}/${repo}/readme${ref ? `?ref=${ref}` : ''}`;
+              const readmeResponse = await axios.get(readmeUrl, { headers: this.githubHeaders });
+              const readme = Buffer.from(readmeResponse.data.content, 'base64').toString();
+              description = readme.split('\n')[0] || '';
+            } catch (error) {
+              // Just continue if README not found
+            }
+          }
+        } catch (error: any) {
+          if (error.response?.status === 404) {
+            throw new Error('Invalid request-check file/URL and try again');
+          }
+          if (error.response?.status === 403) {
+            throw new Error('Authentication failed');
+          }
           throw new Error('Invalid request-check file/URL and try again');
         }
-        if (error.response?.status === 403) {
-          throw new Error('Authentication failed');
+      } else if (pathParts.length === 2) {
+        // Standard case: github.com/owner/repo
+        const [owner, repo] = pathParts;
+        
+        try {
+          // Get repository info
+          const repoResponse = await axios.get(
+            `https://api.github.com/repos/${owner}/${repo}`,
+            { headers: this.githubHeaders }
+          );
+          
+          name = repo;
+          description = repoResponse.data.description || '';
+
+          // Try to get package.json for version
+          try {
+            const packageJsonUrl = `https://api.github.com/repos/${owner}/${repo}/contents/package.json`;
+            const packageJsonResponse = await axios.get(packageJsonUrl, { headers: this.githubHeaders });
+            
+            const content = Buffer.from(packageJsonResponse.data.content, 'base64').toString();
+            const packageJson = JSON.parse(content);
+            version = packageJson.version || '1.0.0';
+            name = packageJson.name || repo;
+            description = packageJson.description || description;
+          } catch (error) {
+            // Just continue if package.json not found
+          }
+
+          // If no description yet, try README
+          if (!description) {
+            try {
+              const readmeUrl = `https://api.github.com/repos/${owner}/${repo}/readme`;
+              const readmeResponse = await axios.get(readmeUrl, { headers: this.githubHeaders });
+              const readme = Buffer.from(readmeResponse.data.content, 'base64').toString();
+              description = readme.split('\n')[0] || '';
+            } catch (error) {
+              // Just continue if README not found
+            }
+          }
+        } catch (error: any) {
+          if (error.response?.status === 404) {
+            throw new Error('Invalid request-check file/URL and try again');
+          }
+          if (error.response?.status === 403) {
+            throw new Error('Authentication failed');
+          }
+          throw new Error('Invalid request-check file/URL and try again');
         }
-        throw new Error('Invalid request-check file/URL and try again');
+      } else {
+        throw new Error('GitHub URL must be in format: github.com/owner/repo or github.com/owner/repo/tree/version');
       }
     } else {
       throw new Error('Only GitHub URLs are supported at this time');
@@ -246,17 +300,23 @@ export class PackageUploadService {
 
   private async fetchAndZipPackage(url: string): Promise<{ zipBuffer: Buffer; base64Content: string }> {
     const urlObj = new URL(url);
-    const [owner, repo] = urlObj.pathname.split('/').filter(Boolean);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    let ref: string | undefined;
+    
+    // Handle version in URL if present
+    if (pathParts.length >= 4 && pathParts[2] === 'tree') {
+      ref = pathParts[3];
+    }
+    
+    const [owner, repo] = pathParts;
 
     try {
-      // Get the zipball directly from GitHub
-      const response = await axios.get(
-        `https://api.github.com/repos/${owner}/${repo}/zipball`,
-        { 
-          headers: this.githubHeaders,
-          responseType: 'arraybuffer'  // Important: we want the raw binary data
-        }
-      );
+      // Get the zipball from GitHub, with version if specified
+      const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball${ref ? `/${ref}` : ''}`;
+      const response = await axios.get(zipUrl, { 
+        headers: this.githubHeaders,
+        responseType: 'arraybuffer'  // Important: we want the raw binary data
+      });
 
       const zipBuffer = Buffer.from(response.data);
       return {
@@ -264,7 +324,6 @@ export class PackageUploadService {
         base64Content: zipBuffer.toString('base64')
       };
     } catch (error) {
-      log.error('Error downloading repository zipball:', error);
       throw error;
     }
   }
@@ -297,7 +356,6 @@ export class PackageUploadService {
         throw new Error(`GitHub repository URL not found in package metadata for ${packageName}`);
       }
     } catch (error) {
-      log.error(`Failed to fetch GitHub URL for npm package:`, error);
       throw error;
     }
   }
@@ -344,10 +402,7 @@ export class PackageUploadService {
         pull_request_review: metrics.PullRequestReview || 0
       };
     } catch (error) {
-      log.error('Package metrics check failed:', error);
-      const err = new Error('Package failed quality requirements');
-      err.name = 'PackageQualityError';
-      throw err;
+      throw error;
     }
   }
 }

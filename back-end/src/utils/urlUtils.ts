@@ -26,8 +26,8 @@ export function checkUrlType(url: string): UrlType {
   log.info(`Checking URL type for: ${url}`);
 
   // Updated patterns to be more flexible
-  const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)\/?(?:\.git)?$/;
-  const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)\/?$/;
+  const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/[^\/]+)?\/?$/;
+  const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)(?:\/v\/([^\/]+))?\/?$/;
 
   log.info(`Testing URL against patterns:
     GitHub: ${githubPattern.test(url)}

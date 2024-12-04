@@ -43,19 +43,28 @@ export class PackageController {
 
             return res.status(201).json(result);
         } catch (error) {
-            if (error instanceof Error) {
-                log.error('Error in createPackage:', error);
-                
-                if (error.name === 'PackageQualityError') {
-                    return res.status(424).json({ error: 'Package failed quality requirements' });
-                }
+            log.error('Error in createPackage:', error);
 
+            if (error instanceof Error) {
                 if (error.message.includes('already exists')) {
                     return res.status(409).json({ error: error.message });
+                }
+                
+                if (error.message.includes('failed quality requirements')) {
+                    return res.status(424).json({ error: error.message });
+                }
+
+                if (error.message.includes('Authentication failed')) {
+                    return res.status(401).json({ error: error.message });
+                }
+
+                if (error.message.includes('Invalid request')) {
+                    return res.status(400).json({ error: error.message });
                 }
 
                 return res.status(400).json({ error: error.message });
             }
+            
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
