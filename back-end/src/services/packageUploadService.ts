@@ -129,7 +129,17 @@ export class PackageUploadService {
         throw new Error('Invalid zip file: package.json not found');
       }
       
-      const packageJson = JSON.parse(packageJsonEntry.getData().toString());
+      let packageJson;
+      try {
+        packageJson = JSON.parse(packageJsonEntry.getData().toString());
+      } catch (error) {
+        throw new Error('Invalid package.json: not valid JSON');
+      }
+
+      if (!packageJson.name) {
+        throw new Error('Invalid package.json: missing name field');
+      }
+
       const name = packageJson.name;
       const version = packageJson.version || '1.0.0';
       const description = packageJson.description || '';
@@ -140,11 +150,20 @@ export class PackageUploadService {
         throw new Error('No repository URL found in package.json');
       }
 
-      // Sanitize the URL
-      repoUrl = repoUrl.replace('git+', '').replace('.git', '');
+      // Sanitize the URL (using same logic as handleNpmUrl)
+      repoUrl = repoUrl
+        .replace("git+", "")
+        .replace(".git", "")
+        .replace("git:", "")
+        .replace('git@github.com:', 'https://github.com/')
+        .replace('git+https://github.com/', 'https://github.com/')
+        .replace('git+ssh://git@github.com/', 'https://github.com/');
 
-      // Check package metrics
-      const metrics = await this.checkPackageMetrics(repoUrl);
+      // Validate that it's a GitHub URL
+      const urlObj = new URL(repoUrl);
+      if (urlObj.hostname !== 'github.com') {
+        throw new Error('Only GitHub repository URLs are supported');
+      }
 
       // Check if this exact version already exists
       const existingPackage = await this.db.getPackageByName(name);
@@ -154,6 +173,27 @@ export class PackageUploadService {
           throw new Error(`Package ${name} version ${version} already exists`);
         }
       }
+
+      // First verify the repository exists
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      const [owner, repo] = pathParts;
+
+      try {
+        const response = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, {
+          headers: this.githubHeaders
+        });
+        if (response.status !== 200) {
+          throw new Error(`GitHub repository ${owner}/${repo} not found`);
+        }
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          throw new Error(`GitHub repository ${owner}/${repo} not found`);
+        }
+        throw error;
+      }
+
+      // Check package metrics after confirming package doesn't exist and repository exists
+      const metrics = await this.checkPackageMetrics(repoUrl);
 
       // Generate unique IDs
       const packageId = existingPackage?.package_id || uuidv4();
@@ -211,7 +251,14 @@ export class PackageUploadService {
           JSProgram: jsProgram || ''
         }
       };
-    } catch (error) {
+    } catch (error: any) {
+      // Add more context to errors
+      if (error.message?.includes('404')) {
+        throw new Error(`GitHub repository not found: ${error.message}`);
+      }
+      if (error.message?.includes('rate limit') || error.message?.includes('504')) {
+        throw new Error(`GitHub API error: ${error.message}`);
+      }
       throw error;
     }
   }
@@ -448,23 +495,28 @@ export class PackageUploadService {
         const pathParts = urlObj.pathname.split('/').filter(Boolean);
         const [owner, repo] = pathParts;
 
+        // First verify the repository exists
+        try {
+          const response = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, {
+            headers: this.githubHeaders
+          });
+          if (response.status !== 200) {
+            throw new Error(`GitHub repository ${owner}/${repo} not found`);
+          }
+        } catch (error: any) {
+          if (error.response?.status === 404) {
+            throw new Error(`GitHub repository ${owner}/${repo} not found`);
+          }
+          throw error;
+        }
+
         // Calculate metrics
         const metrics = await GetNetScore(owner, repo, url);
         
         if (!metrics) {
           log.warn(`Attempt ${attempt}: Failed to calculate package metrics, metrics is null`);
           if (attempt === MAX_RETRIES) {
-            // On final attempt, use default scores instead of failing
-            log.warn('Using default scores due to metrics calculation failure');
-            return {
-              net_score: 0.5, // Minimum acceptable score
-              bus_factor: 0.5,
-              ramp_up: 0.5,
-              license_score: 1, // Assuming license is valid as it's from npm
-              correctness: 0.5,
-              dependency_pinning: 0.5,
-              pull_request_review: 0.5
-            };
+            throw new Error('Failed to calculate package metrics after all retries');
           }
           await sleep(RETRY_DELAY);
           continue;
@@ -492,24 +544,22 @@ export class PackageUploadService {
       } catch (error: any) {
         log.error(`Attempt ${attempt}: Error checking package metrics:`, error);
         
-        if (attempt === MAX_RETRIES) {
-          // On final attempt, check if it's a timeout or rate limit error
-          if (error.message?.includes('504') || error.message?.includes('429')) {
-            log.warn('Using default scores due to GitHub API limitations');
-            return {
-              net_score: 0.5,
-              bus_factor: 0.5,
-              ramp_up: 0.5,
-              license_score: 1,
-              correctness: 0.5,
-              dependency_pinning: 0.5,
-              pull_request_review: 0.5
-            };
-          }
+        // If repository doesn't exist, fail immediately
+        if (error.message?.includes('not found')) {
           throw error;
         }
         
-        await sleep(RETRY_DELAY);
+        // Only retry on rate limits or timeouts
+        if (error.message?.includes('504') || error.message?.includes('429')) {
+          if (attempt === MAX_RETRIES) {
+            throw new Error(`GitHub API error after ${MAX_RETRIES} retries: ${error.message}`);
+          }
+          await sleep(RETRY_DELAY);
+          continue;
+        }
+        
+        // For any other error, fail immediately
+        throw error;
       }
     }
 
