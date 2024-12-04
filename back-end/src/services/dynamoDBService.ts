@@ -196,22 +196,144 @@ export class DynamoDBService {
             throw error;
         }
     }
+   // Update group creation to match user creation pattern
+async createGroup(groupName: string): Promise<void> {
+    try {
+        // Check if group already exists
+        const existingGroup = await this.getGroupByName(groupName);
+        if (existingGroup) {
+            throw new Error(`Group ${groupName} already exists`);
+        }
+
+        const groupData: UserGroupTableItem = {
+            group_id: uuidv4(),
+            group_name: groupName
+        };
+
+        await this.put<'UserGroupTableItem'>(USER_GROUPS_TABLE, groupData);
+        log.info(`Successfully created group ${groupName}`);
+    } catch (error) {
+        log.error('Error creating group:', error);
+        throw error;
+    }
+}
+
+/**
+ * Get a group by its ID
+ * @param groupId UUID of the group
+ */
+async getGroupById(groupId: string): Promise<UserGroupTableItem | null> {
+    try {
+        const result = await this.docClient.send(new GetCommand({
+            TableName: USER_GROUPS_TABLE,
+            Key: {
+                group_id: groupId
+            }
+        }));
+
+        return result.Item as UserGroupTableItem || null;
+    } catch (error) {
+        log.error('Error getting group by ID:', error);
+        throw error;
+    }
+}
+
+/**
+ * Add a user to a group
+ * @param userId UUID of the user
+ * @param groupId UUID of the group
+ */
+async addUserToGroup(userId: string, groupId: string): Promise<void> {
+    try {
+        // Verify both user and group exist
+        const user = await this.getUserById(userId);
+        const group = await this.getGroupById(groupId);
+
+        if (!user) {
+            throw new Error(`User ${userId} does not exist`);
+        }
+        if (!group) {
+            throw new Error(`Group ${groupId} does not exist`);
+        }
+
+        // Update user with group ID
+        const params = {
+            TableName: USERS_TABLE,
+            Key: {
+                user_id: userId
+            },
+            UpdateExpression: 'SET group_id = :groupId',
+            ExpressionAttributeValues: {
+                ':groupId': groupId
+            }
+        };
+
+        await this.docClient.send(new UpdateCommand(params));
+        log.info(`Successfully added user ${userId} to group ${groupId}`);
+    } catch (error) {
+        log.error('Error adding user to group:', error);
+        throw error;
+    }
+}
+
     /**
-     * Creates a new user group
-     * @param groupData - Group data including name and ID
-     * @throws Error if group name already exists
+     * Remove a user from their group
+     * @param userId UUID of the user
      */
-    async createUserGroup(groupData: UserGroupTableItem): Promise<void> {
+    async removeUserFromGroup(userId: string): Promise<void> {
         try {
-            const existingGroup = await this.getGroupByName(groupData.group_name);
-            if (existingGroup) {
-                throw new Error(`Group ${groupData.group_name} already exists`);
+            const user = await this.getUserById(userId);
+            if (!user) {
+                throw new Error(`User ${userId} does not exist`);
             }
 
-            await this.put<'UserGroupTableItem'>(USER_GROUPS_TABLE, groupData);
-            log.info(`Successfully created group ${groupData.group_name}`);
+            if (!user.group_id) {
+                log.info(`User ${userId} is not in any group`);
+                return;
+            }
+
+            const params = {
+                TableName: USERS_TABLE,
+                Key: {
+                    user_id: userId
+                },
+                UpdateExpression: 'REMOVE group_id'
+            };
+
+            await this.docClient.send(new UpdateCommand(params));
+            log.info(`Successfully removed user ${userId} from their group`);
         } catch (error) {
-            log.error('Error creating group:', error);
+            log.error('Error removing user from group:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a group and remove all users from it
+     * @param groupId UUID of the group to delete
+     */
+    async deleteGroup(groupId: string): Promise<void> {
+        try {
+            // Get all users in the group
+            const usersInGroup = await this.getUsersByGroupId(groupId);
+            
+            // Remove all users from the group
+            const removeUserPromises = usersInGroup.map(user => 
+                this.removeUserFromGroup(user.user_id)
+            );
+            await Promise.all(removeUserPromises);
+
+            // Delete the group
+            await this.docClient.send(new DeleteCommand({
+                TableName: USER_GROUPS_TABLE,
+                Key: {
+                    group_id: groupId
+                }
+            }));
+
+            log.info(`Successfully deleted group ${groupId}`);
+        } catch (error) {
+            log.error('Error deleting group:', error);
             throw error;
         }
     }

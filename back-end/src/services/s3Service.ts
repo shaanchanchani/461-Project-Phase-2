@@ -1,6 +1,7 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
+import { log } from '../logger';
 
 /**
  * S3Service handles all interactions with AWS S3 for package content storage.
@@ -166,4 +167,120 @@ export class S3Service {
             throw new Error('Failed to delete package content from S3');
         }
     }
+
+    /**
+     * Clears all objects from the S3 bucket.
+     * @returns Promise<void>
+     * @throws Error if clearing fails
+     */
+    async clearBucket(): Promise<void> {
+        try {
+            console.log('Starting bucket clearing process...');
+            
+            let continuationToken: string | undefined;
+            let deletedCount = 0;
+    
+            do {
+                // List all objects in the bucket (no prefix to get everything)
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    ContinuationToken: continuationToken
+                });
+    
+                const listResponse = await this.s3Client.send(listCommand);
+    
+                if (listResponse.Contents && listResponse.Contents.length > 0) {
+                    // Delete each object in the current batch
+                    for (const object of listResponse.Contents) {
+                        if (object.Key) {
+                            const deleteCommand = new DeleteObjectCommand({
+                                Bucket: this.bucketName,
+                                Key: object.Key
+                            });
+    
+                            await this.s3Client.send(deleteCommand);
+                            deletedCount++;
+                            console.log(`Deleted object: ${object.Key}`);
+                        }
+                    }
+                }
+    
+                // Update the continuation token for the next batch
+                continuationToken = listResponse.NextContinuationToken;
+    
+            } while (continuationToken);
+    
+            console.log(`Successfully deleted ${deletedCount} objects from bucket`);
+    
+            // Verify bucket is empty
+            const isEmpty = await this.isBucketEmpty();
+            if (!isEmpty) {
+                throw new Error('Bucket still contains objects after deletion attempt');
+            }
+    
+        } catch (error) {
+            console.error('Error clearing bucket:', error);
+            throw new Error(`Failed to clear bucket: ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * Checks if the S3 bucket is empty of package content
+     * @returns Promise<boolean> - True if no package content exists, false otherwise
+     */
+    async isBucketEmpty(): Promise<boolean> {  // Fixed return type
+        try {
+            log.info('Checking if S3 bucket is empty...');
+            
+            const listCommand = new ListObjectsV2Command({
+                Bucket: this.bucketName,
+                Prefix: 'packages/',  // Only look for package content
+                MaxKeys: 1  // We only need to know if at least one object exists
+            });
+
+            const response = await this.s3Client.send(listCommand);
+            
+            // If Contents is undefined or empty array, bucket is empty
+            const isEmpty = !response.Contents || response.Contents.length === 0;
+            
+            log.info(`S3 bucket ${isEmpty ? 'is' : 'is not'} empty`);
+            return isEmpty;
+
+        } catch (error) {
+            log.error('Error checking if S3 bucket is empty:', error);
+            throw new Error(`Failed to check if bucket is empty: ${(error as Error).message}`);
+        }
+    }
+    /**
+     * Test function to check bucket status
+     */
+    async testBucketEmpty(): Promise<void> {
+        try {
+            log.info('Starting bucket empty test...');
+            const isEmpty = await this.isBucketEmpty();
+            log.info(`Test result: Bucket is ${isEmpty ? 'empty' : 'not empty'}`);
+            
+            if (!isEmpty) {
+                // List the first few objects to see what's there
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    Prefix: 'packages/',
+                    MaxKeys: 5  // List up to 5 objects for inspection
+                });
+
+                const response = await this.s3Client.send(listCommand);
+                
+                if (response.Contents) {
+                    log.info('Found objects:');
+                    response.Contents.forEach(object => {
+                        log.info(`- ${object.Key}`);
+                    });
+                }
+            }
+        } catch (error) {
+            log.error('Test failed:', error);
+            throw error;
+        }
+}
+
 }

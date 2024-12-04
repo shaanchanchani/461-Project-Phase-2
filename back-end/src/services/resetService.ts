@@ -42,10 +42,7 @@ export class ResetService {
             // Step 2: Clear all DynamoDB tables
             log.info('Clearing DynamoDB tables...');
             await Promise.all([
-                this.db.clearTable(PACKAGES_TABLE),
-                this.db.clearTable(PACKAGE_VERSIONS_TABLE),
-                this.db.clearTable(PACKAGE_METRICS_TABLE),
-                this.db.clearTable(DOWNLOADS_TABLE)
+                this.db.clearAllTables()
             ]);
 
             // Step 3: Restore default admin user
