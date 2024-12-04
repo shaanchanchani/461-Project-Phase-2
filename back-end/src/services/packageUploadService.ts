@@ -45,14 +45,17 @@ export class PackageUploadService {
       // Extract package info from URL
       const { name, version, description } = await this.extractPackageInfo(githubUrl);
 
-      // Check if package already exists before downloading and uploading
+      // Check if this exact version already exists
       const existingPackage = await this.db.getPackageByName(name);
       if (existingPackage) {
-        throw new Error(`Package ${name} already exists`);
+        const existingVersion = await this.db.getPackageVersion(existingPackage.package_id, version);
+        if (existingVersion) {
+          throw new Error(`Package ${name} version ${version} already exists`);
+        }
       }
 
       // Generate unique IDs
-      const packageId = uuidv4();
+      const packageId = existingPackage?.package_id || uuidv4();
       const versionId = uuidv4();
 
       // Fetch package content and convert to base64
@@ -85,7 +88,18 @@ export class PackageUploadService {
       // Store the metrics
       await metricService.createMetricEntry(versionId, metrics);
 
-      await this.db.createPackageEntry(packageData);
+      if (!existingPackage) {
+        // Only create a new package entry if this is a completely new package
+        await this.db.createPackageEntry(packageData);
+      } else {
+        // For existing packages, only update the latest version if this version is newer
+        const currentVersion = existingPackage.latest_version;
+        if (this.isNewerVersion(version, currentVersion)) {
+          await this.db.updatePackageLatestVersion(existingPackage.name, version);
+        }
+      }
+
+      // Always create a new version entry
       await this.db.createPackageVersion(versionData);
 
       return {
@@ -133,14 +147,17 @@ export class PackageUploadService {
       // Check package metrics
       const metrics = await this.checkPackageMetrics(repoUrl);
 
-      // Check if package already exists
+      // Check if this exact version already exists
       const existingPackage = await this.db.getPackageByName(name);
       if (existingPackage) {
-        throw new Error(`Package ${name} already exists`);
+        const existingVersion = await this.db.getPackageVersion(existingPackage.package_id, version);
+        if (existingVersion) {
+          throw new Error(`Package ${name} version ${version} already exists`);
+        }
       }
 
       // Generate unique IDs
-      const packageId = uuidv4();
+      const packageId = existingPackage?.package_id || uuidv4();
       const versionId = uuidv4();
 
       // Upload to S3
@@ -170,7 +187,18 @@ export class PackageUploadService {
       // Store the metrics
       await metricService.createMetricEntry(versionId, metrics);
 
-      await this.db.createPackageEntry(packageData);
+      if (!existingPackage) {
+        // Only create a new package entry if this is a completely new package
+        await this.db.createPackageEntry(packageData);
+      } else {
+        // For existing packages, only update the latest version if this version is newer
+        const currentVersion = existingPackage.latest_version;
+        if (this.isNewerVersion(version, currentVersion)) {
+          await this.db.updatePackageLatestVersion(existingPackage.name, version);
+        }
+      }
+
+      // Always create a new version entry
       await this.db.createPackageVersion(versionData);
 
       return {
@@ -419,5 +447,23 @@ export class PackageUploadService {
     } catch (error) {
       throw error;
     }
+  }
+
+  private isNewerVersion(version: string, currentVersion: string): boolean {
+    const versionParts = version.split('.').map(Number);
+    const currentVersionParts = currentVersion.split('.').map(Number);
+
+    for (let i = 0; i < Math.max(versionParts.length, currentVersionParts.length); i++) {
+      const versionPart = versionParts[i] || 0;
+      const currentVersionPart = currentVersionParts[i] || 0;
+
+      if (versionPart > currentVersionPart) {
+        return true;
+      } else if (versionPart < currentVersionPart) {
+        return false;
+      }
+    }
+
+    return false;
   }
 }

@@ -18,7 +18,8 @@ import {
     DynamoDBDocumentClient,
     PutCommand,
     QueryCommand as QueryCommandDoc,
-    GetCommand
+    GetCommand,
+    UpdateCommand
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
 import { 
@@ -280,6 +281,27 @@ export class DynamoDBService {
             log.info(`Successfully recorded download for package ${downloadData.package_id}`);
         } catch (error) {
             log.error('Error recording download:', error);
+            throw error;
+        }
+    }
+
+    public async updatePackageLatestVersion(packageId: string, version: string): Promise<void> {
+        try {
+            const params = {
+                TableName: PACKAGES_TABLE,
+                Key: {
+                    name: packageId
+                },
+                UpdateExpression: 'SET latest_version = :version',
+                ExpressionAttributeValues: {
+                    ':version': version
+                }
+            };
+
+            await this.docClient.send(new UpdateCommand(params));
+            log.info(`Updated latest version to ${version} for package ${packageId}`);
+        } catch (error) {
+            log.error('Error updating package latest version:', error);
             throw error;
         }
     }
