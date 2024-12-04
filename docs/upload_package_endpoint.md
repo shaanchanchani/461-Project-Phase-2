@@ -67,14 +67,71 @@ Response:
 
 2. Error Responses:
    - 400 Bad Request:
-     - Missing required fields
-     - Malformed request body
-     - Invalid package data
-     - Both Content and URL are set
+     - Message: "Invalid request format"
+     - Cases:
+       * Both Content and URL fields provided
+         ```json
+         {"error": "Request cannot contain both Content and URL fields"}
+         ```
+       * Missing required fields
+         ```json
+         {"error": "Missing required field: {fieldName}"}
+         ```
+       * Invalid base64 encoding
+         ```json
+         {"error": "Invalid base64 encoding in Content field"}
+         ```
+       * Invalid ZIP format
+         ```json
+         {"error": "Content is not a valid ZIP archive"}
+         ```
+       * Missing package.json
+         ```json
+         {"error": "ZIP archive must contain a valid package.json file"}
+         ```
+       * Invalid URL format
+         ```json
+         {"error": "Invalid repository URL format"}
+         ```
+
    - 403 Forbidden:
-     - Invalid or missing authentication token
+     ```json
+     {
+       "error": "Authentication failed",
+       "details": "Invalid or expired token"
+     }
+     ```
+
    - 409 Conflict:
-     - Package name already exists with the same version
+     ```json
+     {
+       "error": "Package conflict",
+       "details": "Package {name} version {version} already exists"
+     }
+     ```
+
+   - 424 Failed Dependency:
+     ```json
+     {
+       "error": "Package failed quality checks",
+       "metrics": {
+         "failedMetrics": ["BusFactor", "Correctness"],
+         "required": 0.5,
+         "actual": {
+           "BusFactor": 0.2,
+           "Correctness": 0.3
+         }
+       }
+     }
+     ```
+
+   - 413 Payload Too Large:
+     ```json
+     {
+       "error": "Package size exceeds limit",
+       "maxSize": "50MB",
+       "actualSize": "75MB"
+     }
 
 Notes:
 ------
