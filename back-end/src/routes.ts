@@ -40,4 +40,7 @@ router.get('/package/:id/cost', asyncHandler(RatingController.getCost));
 // Package Upload Endpoint
 router.post('/package', asyncHandler(packageController.createPackage));
 
+// Registry Reset Endpoint
+router.delete('/reset', asyncHandler(packageController.resetRegistry));
+
 export default router;
