@@ -133,6 +133,32 @@ Response:
        "actualSize": "75MB"
      }
 
+Remaining Implementation Tasks:
+-----------------------------
+1. URL Processing:
+  - [ ] Add npm URL version parsing
+  - [ ] Extract version number from URL when present
+
+2. Package Processing:
+  - [ ] Implement debloat:
+    * Tree shaking
+    * Minify code
+    * Remove unused dependencies
+  - [ ] Add JSProgram handling
+  - [ ] Validate package.json structure 
+  - [ ] Version conflict detection
+
+3. Error Handling:
+  - [ ] Add structured error responses
+  - [ ] Detailed validation messages
+  - [ ] Version conflict responses
+  - [ ] Return 424 for failed metrics
+
+4. Documentation:
+  - [ ] Add API examples 
+  - [ ] Document error catalog
+  - [ ] Define package requirements
+
 Notes:
 ------
 1. The package name must be unique in the registry
