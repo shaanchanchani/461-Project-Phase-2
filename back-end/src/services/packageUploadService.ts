@@ -121,6 +121,18 @@ export class PackageUploadService {
       const version = packageJson.version || '1.0.0';
       const description = packageJson.description || '';
 
+      // Extract repository URL from package.json
+      let repoUrl = packageJson.repository?.url || packageJson.homepage;
+      if (!repoUrl) {
+        throw new Error('No repository URL found in package.json');
+      }
+
+      // Sanitize the URL
+      repoUrl = repoUrl.replace('git+', '').replace('.git', '');
+
+      // Check package metrics
+      const metrics = await this.checkPackageMetrics(repoUrl);
+
       // Check if package already exists
       const existingPackage = await this.db.getPackageByName(name);
       if (existingPackage) {
@@ -154,6 +166,9 @@ export class PackageUploadService {
         debloated: debloat,
         created_at: new Date().toISOString()
       };
+
+      // Store the metrics
+      await metricService.createMetricEntry(versionId, metrics);
 
       await this.db.createPackageEntry(packageData);
       await this.db.createPackageVersion(versionData);
