@@ -7,12 +7,17 @@ import {
     KeyType,
     BillingMode,
     ListTablesCommand,
-    DescribeTableCommand
+    DescribeTableCommand,
+    GetItemCommand,
+    PutItemCommand,
+    QueryCommand,
+    DeleteItemCommand,
+    ScanCommand
 } from "@aws-sdk/client-dynamodb";
 import {
     DynamoDBDocumentClient,
     PutCommand,
-    QueryCommand,
+    QueryCommand as QueryCommandDoc,
     GetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { createHash } from 'crypto';
@@ -68,7 +73,7 @@ export class DynamoDBService {
 
     async getPackageByName(name: string): Promise<PackageTableItem | null> {
         try {
-            const result = await this.docClient.send(new QueryCommand({
+            const result = await this.docClient.send(new QueryCommandDoc({
                 TableName: PACKAGES_TABLE,
                 KeyConditionExpression: '#name = :name',
                 ExpressionAttributeNames: {
@@ -137,7 +142,7 @@ export class DynamoDBService {
                 }
             };
 
-            const result = await this.docClient.send(new QueryCommand(params));
+            const result = await this.docClient.send(new QueryCommandDoc(params));
             return result.Items?.[0] as PackageMetricsTableItem || null;
         } catch (error) {
             log.error('Error getting metrics by version ID:', error);
@@ -152,7 +157,7 @@ export class DynamoDBService {
      */
     async getPackageVersions(packageId: string): Promise<PackageVersionTableItem[]> {
         try {
-            const result = await this.docClient.send(new QueryCommand({
+            const result = await this.docClient.send(new QueryCommandDoc({
                 TableName: PACKAGE_VERSIONS_TABLE,
                 KeyConditionExpression: 'package_id = :packageId',
                 ExpressionAttributeValues: {
@@ -175,7 +180,7 @@ export class DynamoDBService {
      */
     async getPackageVersion(packageId: string, version: string): Promise<PackageVersionTableItem | null> {
         try {
-            const result = await this.docClient.send(new QueryCommand({
+            const result = await this.docClient.send(new QueryCommandDoc({
                 TableName: PACKAGE_VERSIONS_TABLE,
                 KeyConditionExpression: 'package_id = :packageId AND version = :version',
                 ExpressionAttributeValues: {
@@ -198,17 +203,21 @@ export class DynamoDBService {
      */
     async getLatestPackageVersion(packageId: string): Promise<PackageVersionTableItem | null> {
         try {
-            const result = await this.docClient.send(new QueryCommand({
+            const result = await this.docClient.send(new QueryCommandDoc({
                 TableName: PACKAGE_VERSIONS_TABLE,
                 KeyConditionExpression: 'package_id = :packageId',
                 ExpressionAttributeValues: {
                     ':packageId': packageId
                 },
-                ScanIndexForward: false, // Sort in descending order
+                ScanIndexForward: false, // Sort in descending order by the range key (version)
                 Limit: 1 // Get only the latest version
             }));
 
-            return result.Items?.[0] as PackageVersionTableItem || null;
+            if (!result.Items || result.Items.length === 0) {
+                return null;
+            }
+
+            return result.Items[0] as PackageVersionTableItem;
         } catch (error) {
             log.error('Error getting latest package version:', error);
             throw error;
@@ -216,24 +225,47 @@ export class DynamoDBService {
     }
 
     /**
-     * Get packages by user ID
-     * @param userId The ID of the user
-     * @returns Array of package items
+     * Get a package by its ID, including its content
+     * @param id The package ID
+     * @returns Complete package data or null if not found
      */
-    async getPackagesByUserId(userId: string): Promise<PackageTableItem[]> {
+    public async getPackageById(id: PackageID): Promise<Package | null> {
         try {
-            const result = await this.docClient.send(new QueryCommand({
+            // Get package metadata using the GSI
+            const result = await this.docClient.send(new QueryCommandDoc({
                 TableName: PACKAGES_TABLE,
-                IndexName: 'user_id-index',
-                KeyConditionExpression: 'user_id = :userId',
+                IndexName: 'package_id-index',
+                KeyConditionExpression: 'package_id = :pid',
                 ExpressionAttributeValues: {
-                    ':userId': userId
+                    ':pid': id
                 }
             }));
 
-            return result.Items as PackageTableItem[] || [];
+            if (!result.Items || result.Items.length === 0) {
+                return null;
+            }
+
+            const packageData = result.Items[0] as PackageTableItem;
+            
+            // Get the latest version data
+            const latestVersion = await this.getLatestPackageVersion(id);
+            if (!latestVersion) {
+                return null;
+            }
+
+            // Format response according to API spec
+            return {
+                metadata: {
+                    Name: packageData.name,
+                    Version: latestVersion.version,
+                    ID: packageData.package_id
+                },
+                data: {
+                    Content: latestVersion.zip_file_path
+                }
+            };
         } catch (error) {
-            log.error('Error getting packages by user ID:', error);
+            log.error('Error getting package by ID:', error);
             throw error;
         }
     }

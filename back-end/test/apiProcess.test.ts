@@ -117,15 +117,22 @@ describe("GitHub API Process Functions", () => {
 
   describe("_fetchContributors", () => {
     it("should fetch contributors successfully", async () => {
-      const mockContributors = [{ login: "contributor1" }];
-      (axios.get as jest.Mock).mockResolvedValue(mockContributors);
+      const mockContributors = [{ login: "contributor1", contributions: 10 }];
+      (axios.get as jest.Mock).mockResolvedValue({ data: mockContributors });
 
       const result = await _fetchContributors("mockOwner", "mockRepo");
       expect(result).toEqual(mockContributors);
       expect(axios.get).toHaveBeenCalledWith(
-        "https://api.github.com/repos/mockOwner/mockRepo/stats/contributors",
+        "https://api.github.com/repos/mockOwner/mockRepo/contributors",
         { headers: { Authorization: `token ${process.env.GITHUB_TOKEN}` } },
       );
+    });
+
+    it("should handle errors appropriately", async () => {
+      const mockError = new Error("API Error");
+      (axios.get as jest.Mock).mockRejectedValue(mockError);
+
+      await expect(_fetchContributors("mockOwner", "mockRepo")).rejects.toThrow();
     });
   });
 });

@@ -163,10 +163,25 @@ export interface PackageCost {
 export type PackageAction = 'CREATE' | 'UPDATE' | 'DOWNLOAD' | 'RATE';
 
 export interface PackageHistoryEntry {
-    action: PackageAction;
-    timestamp: string;
-    user?: string;
-    packageId: PackageID;
+    User: {
+        name: string;      // Required by OpenAPI spec
+        isAdmin: boolean;  // Required by OpenAPI spec
+    };
+    Date: string;         // ISO-8601 format in UTC
+    PackageMetadata: {
+        Name: PackageName;  // Required by OpenAPI spec
+        Version: string;    // Example: "1.2.3"
+        ID: PackageID;      // Must match pattern: ^[a-zA-Z0-9\-]+$
+    };
+    Action: PackageAction;
+}
+
+// API Response Types
+export type GetPackageByNameResponse = PackageHistoryEntry[];
+
+// API Request Types
+export interface GetPackageByNameRequest {
+    name: PackageName;  // Required
 }
 
 // Database Types (if using DynamoDB)

@@ -48,7 +48,7 @@ export class S3Service {
 
     /**
      * Uploads a zip file to S3 for a specific package.
-     * @param packageId - Unique identifier for the package
+     * @param filePath - Full path to store the file in S3
      * @param zipContent - Buffer containing the zip file content
      * @returns Promise<string> - The S3 key where the file was stored
      * @throws Error if upload fails
@@ -56,22 +56,20 @@ export class S3Service {
      * Example:
      * ```typescript
      * const zipBuffer = Buffer.from(...); // your zip content
-     * const key = await s3Service.uploadPackageContent('package-123', zipBuffer);
+     * const key = await s3Service.uploadPackageContent('packages/package-123/content.zip', zipBuffer);
      * ```
      */
-    async uploadPackageContent(packageId: string, zipContent: Buffer): Promise<string> {
-        const key = `packages/${packageId}/content.zip`;
-        
+    async uploadPackageContent(filePath: string, zipContent: Buffer): Promise<string> {
         const command = new PutObjectCommand({
             Bucket: this.bucketName,
-            Key: key,
+            Key: filePath,
             Body: zipContent,
             ContentType: 'application/zip'
         });
 
         try {
             await this.s3Client.send(command);
-            return key;
+            return filePath;
         } catch (error) {
             console.error('Error uploading to S3:', error);
             throw new Error('Failed to upload package content to S3');
@@ -80,22 +78,20 @@ export class S3Service {
 
     /**
      * Downloads a package's zip file content from S3.
-     * @param packageId - Unique identifier for the package
+     * @param filePath - Full path to the file in S3
      * @returns Promise<Buffer> - The zip file content as a buffer
      * @throws Error if the file doesn't exist or download fails
      * 
      * Example:
      * ```typescript
-     * const content = await s3Service.getPackageContent('package-123');
+     * const content = await s3Service.getPackageContent('packages/package-123/content.zip');
      * // Use content buffer...
      * ```
      */
-    async getPackageContent(packageId: string): Promise<Buffer> {
-        const key = `packages/${packageId}/content.zip`;
-        
+    async getPackageContent(filePath: string): Promise<Buffer> {
         const command = new GetObjectCommand({
             Bucket: this.bucketName,
-            Key: key
+            Key: filePath
         });
 
         try {
@@ -122,22 +118,20 @@ export class S3Service {
     /**
      * Generates a temporary signed URL for downloading a package's zip file.
      * The URL expires in 1 hour.
-     * @param packageId - Unique identifier for the package
+     * @param filePath - Full path to the file in S3
      * @returns Promise<string> - Temporary signed URL for downloading the file
      * @throws Error if URL generation fails
      * 
      * Example:
      * ```typescript
-     * const url = await s3Service.getSignedDownloadUrl('package-123');
+     * const url = await s3Service.getSignedDownloadUrl('packages/package-123/content.zip');
      * // Share URL with client...
      * ```
      */
-    async getSignedDownloadUrl(packageId: string): Promise<string> {
-        const key = `packages/${packageId}/content.zip`;
-        
+    async getSignedDownloadUrl(filePath: string): Promise<string> {
         const command = new GetObjectCommand({
             Bucket: this.bucketName,
-            Key: key
+            Key: filePath
         });
 
         try {
@@ -150,21 +144,19 @@ export class S3Service {
 
     /**
      * Deletes a package's zip file from S3.
-     * @param packageId - Unique identifier for the package
+     * @param filePath - Full path to the file in S3
      * @returns Promise<void>
      * @throws Error if deletion fails
      * 
      * Example:
      * ```typescript
-     * await s3Service.deletePackageContent('package-123');
+     * await s3Service.deletePackageContent('packages/package-123/content.zip');
      * ```
      */
-    async deletePackageContent(packageId: string): Promise<void> {
-        const key = `packages/${packageId}/content.zip`;
-        
+    async deletePackageContent(filePath: string): Promise<void> {
         const command = new DeleteObjectCommand({
             Bucket: this.bucketName,
-            Key: key
+            Key: filePath
         });
 
         try {

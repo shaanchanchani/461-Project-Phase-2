@@ -1,7 +1,7 @@
 import { DynamoDBService } from '../src/services/dynamoDBService';
 import { PackageTableItem, PackageVersionTableItem } from '../src/types';
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 
 // Mock AWS SDK clients
 jest.mock('@aws-sdk/client-dynamodb', () => ({
@@ -20,6 +20,9 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
         input
     })),
     QueryCommand: jest.fn().mockImplementation((input) => ({
+        input
+    })),
+    GetCommand: jest.fn().mockImplementation((input) => ({
         input
     }))
 }));
@@ -173,6 +176,106 @@ describe('DynamoDBService', () => {
 
             await expect(service.createPackageVersion(mockVersion))
                 .rejects.toThrow('Version creation failed');
+        });
+    });
+
+    describe('getPackageById', () => {
+        it('should get package by ID successfully', async () => {
+            const mockPackage: PackageTableItem = {
+                package_id: '123',
+                name: 'test-package',
+                latest_version: '1.0.0',
+                description: 'Test package',
+                created_at: new Date().toISOString(),
+                user_id: 'user123'
+            };
+
+            const mockVersion: PackageVersionTableItem = {
+                version_id: 'v123',
+                package_id: '123',
+                version: '1.0.0',
+                zip_file_path: 's3://bucket/path',
+                debloated: false,
+                created_at: new Date().toISOString()
+            };
+
+            // Mock getting package using GSI
+            mockDocClientSend.mockResolvedValueOnce({
+                Items: [mockPackage]
+            });
+
+            // Mock getting latest version
+            mockDocClientSend.mockResolvedValueOnce({
+                Items: [mockVersion]
+            });
+
+            const result = await service.getPackageById('123');
+
+            expect(result).toEqual({
+                metadata: {
+                    Name: mockPackage.name,
+                    Version: mockVersion.version,
+                    ID: mockPackage.package_id
+                },
+                data: {
+                    Content: mockVersion.zip_file_path
+                }
+            });
+
+            // Verify GSI query
+            expect(mockDocClientSend).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    input: {
+                        TableName: 'Packages',
+                        IndexName: 'package_id-index',
+                        KeyConditionExpression: 'package_id = :pid',
+                        ExpressionAttributeValues: {
+                            ':pid': '123'
+                        }
+                    }
+                })
+            );
+        });
+
+        it('should return null if package not found', async () => {
+            // Mock empty result from GSI query
+            mockDocClientSend.mockResolvedValueOnce({
+                Items: []
+            });
+
+            const result = await service.getPackageById('123');
+            expect(result).toBeNull();
+        });
+
+        it('should return null if version not found', async () => {
+            const mockPackage: PackageTableItem = {
+                package_id: '123',
+                name: 'test-package',
+                latest_version: '1.0.0',
+                description: 'Test package',
+                created_at: new Date().toISOString(),
+                user_id: 'user123'
+            };
+
+            // Mock getting package using GSI
+            mockDocClientSend.mockResolvedValueOnce({
+                Items: [mockPackage]
+            });
+
+            // Mock getting latest version (not found)
+            mockDocClientSend.mockResolvedValueOnce({
+                Items: []
+            });
+
+            const result = await service.getPackageById('123');
+            expect(result).toBeNull();
+        });
+
+        it('should throw error when query fails', async () => {
+            mockDocClientSend.mockRejectedValue(new Error('Query failed'));
+
+            await expect(service.getPackageById('123'))
+                .rejects.toThrow('Query failed');
         });
     });
 });

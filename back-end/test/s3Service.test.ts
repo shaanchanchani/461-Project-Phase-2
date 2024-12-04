@@ -4,17 +4,17 @@ import * as path from 'path';
 
 describe('S3Service Tests', () => {
     let s3Service: S3Service;
-    let testPackageId: string;
+    let testFilePath: string;
     
     beforeAll(() => {
         s3Service = new S3Service();
-        testPackageId = 'test-package-' + Date.now();
+        testFilePath = `packages/test-package-${Date.now()}/content.zip`;
     });
 
     afterAll(async () => {
         // Clean up any leftover test files
         try {
-            await s3Service.deletePackageContent(testPackageId);
+            await s3Service.deletePackageContent(testFilePath);
         } catch (error) {
             // Ignore errors during cleanup
             console.log('Cleanup: No files to delete or already deleted');
@@ -22,8 +22,8 @@ describe('S3Service Tests', () => {
     });
 
     beforeEach(() => {
-        // Reset the test package ID for each test to ensure isolation
-        testPackageId = 'test-package-' + Date.now();
+        // Reset the test file path for each test to ensure isolation
+        testFilePath = `packages/test-package-${Date.now()}/content.zip`;
     });
 
     it('should upload, download, and delete a test zip file', async () => {
@@ -33,29 +33,29 @@ describe('S3Service Tests', () => {
         try {
             // Test upload
             console.log('Testing upload...');
-            const s3Key = await s3Service.uploadPackageContent(testPackageId, testContent);
+            const s3Key = await s3Service.uploadPackageContent(testFilePath, testContent);
             expect(s3Key).toBeDefined();
-            expect(s3Key).toContain(testPackageId);
+            expect(s3Key).toBe(testFilePath);
 
             // Test download
             console.log('Testing download...');
-            const downloadedContent = await s3Service.getPackageContent(testPackageId);
+            const downloadedContent = await s3Service.getPackageContent(testFilePath);
             expect(downloadedContent).toBeDefined();
             expect(downloadedContent.toString()).toBe(testContent.toString());
 
             // Test signed URL generation
             console.log('Testing signed URL generation...');
-            const signedUrl = await s3Service.getSignedDownloadUrl(testPackageId);
+            const signedUrl = await s3Service.getSignedDownloadUrl(testFilePath);
             expect(signedUrl).toBeDefined();
-            expect(signedUrl).toContain(testPackageId);
+            expect(signedUrl).toContain(testFilePath); // Check for unencoded path
             
             // Test delete
             console.log('Testing delete...');
-            await s3Service.deletePackageContent(testPackageId);
+            await s3Service.deletePackageContent(testFilePath);
             
             // Verify deletion by attempting to download (should throw an error)
             try {
-                await s3Service.getPackageContent(testPackageId);
+                await s3Service.getPackageContent(testFilePath);
                 fail('Expected an error when downloading deleted content');
             } catch (error) {
                 expect(error).toBeDefined();

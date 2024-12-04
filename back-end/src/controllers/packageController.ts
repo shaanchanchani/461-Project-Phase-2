@@ -60,32 +60,21 @@ export class PackageController {
         }
     }
 
-    public getPackage = async (req: AuthenticatedRequest, res: Response) => {
+    public getPackageById = async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const { name } = req.params;
+            const { id } = req.params;
             const userName = req.user?.name;
+            
             if (!userName) {
                 return res.status(401).json({ error: 'User not authenticated' });
             }
-            const result = await this.packageDownloadService.getPackageByName(name, userName);
-            res.status(200).json(result);
-        } catch (error) {
-            log.error('Error retrieving package:', error);
-            if (error instanceof Error) {
-                if (error.message === 'Package not found') {
-                    return res.status(404).json({ error: 'Package not found' });
-                }
-                return res.status(400).json({ error: error.message });
-            }
-            res.status(500).json({ error: 'Failed to retrieve package' });
-        }
-    }
 
-    public getPackageByName = async (req: AuthenticatedRequest, res: Response) => {
-        try {
-            const { name } = req.params;
-            const result = await this.packageService.getPackageByName(name);
-            
+            // Validate PackageID format
+            if (!id.match(/^[a-zA-Z0-9\-]+$/)) {
+                return res.status(400).json({ error: 'Invalid package ID format' });
+            }
+
+            const result = await this.packageDownloadService.getPackageById(id, userName);
             if (!result) {
                 return res.status(404).json({ error: 'Package not found' });
             }
@@ -93,28 +82,13 @@ export class PackageController {
             res.status(200).json(result);
         } catch (error) {
             log.error('Error retrieving package:', error);
-            res.status(500).json({ error: 'Failed to retrieve package' });
-        }
-    }
-
-    public getPackageVersion = async (req: AuthenticatedRequest, res: Response) => {
-        try {
-            const { name, version } = req.params;
-            const userName = req.user?.name;
-            if (!userName) {
-                return res.status(401).json({ error: 'User not authenticated' });
-            }
-            const result = await this.packageDownloadService.getPackageVersion(name, version, userName);
-            res.status(200).json(result);
-        } catch (error) {
-            log.error('Error retrieving package version:', error);
             if (error instanceof Error) {
-                if (error.message === 'Package not found' || error.message === 'Package version not found') {
+                if (error.message === 'Package content not found') {
                     return res.status(404).json({ error: error.message });
                 }
                 return res.status(400).json({ error: error.message });
             }
-            res.status(500).json({ error: 'Failed to retrieve package version' });
+            res.status(500).json({ error: 'Failed to retrieve package' });
         }
     }
 

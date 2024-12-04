@@ -16,9 +16,10 @@ if (!process.env.GITHUB_TOKEN) {
 
 // Rate limiter to prevent hitting the GitHub API rate limit (5000 requests per hour for authenticated users)
 const limiter = new Bottleneck({
-  // rate limit = (3600 sec/hr) / (5000 req/hr) = 0.72 sec/req = 720 ms/req ~ 750 ms/req
-  maxConcurrent: 1,
-  minTime: 750, // 750ms between each request
+  // Allow 3 concurrent requests
+  maxConcurrent: 3,
+  // 100ms between requests per concurrent slot (30 requests per second total max)
+  minTime: 100,
 });
 
 // Repository details interface
@@ -85,72 +86,52 @@ async function getGithubInfo(
 ): Promise<RepoDetails> {
   log.info(`Entering getGithubInfo for ${owner}/${repo}`);
 
-  log.info(
-    `In getGithubInfo, fetching repository details for ${owner}/${repo}`,
-  );
-  // Fetch the repository details from GitHub
-  const repoData = await limiter.schedule(() => _fetchRepoData(owner, repo));
-  log.info(`In getGithubInfo, Repository details fetched for ${owner}/${repo}`);
-
-  log.info(
-    `In getGithubInfo, fetching license information for ${owner}/${repo}`,
-  );
-  // Fetch the license information for the repository
-  const license = await limiter.schedule(() =>
-    _fetchLicense(repoData, owner, repo),
-  );
-  log.info(
-    `In getGithubInfo, license information fetched for ${owner}/${repo}`,
-  );
-
   // Get the start date for the analysis (12 months ago or repository creation date, whichever is later)
   const currentDate = new Date();
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(currentDate.getMonth() - 12);
   const startDate = twelveMonthsAgo;
 
-  log.info(`In getGithubInfo, fetching latest commits for ${owner}/${repo}`);
-  // Fetch latest commits (up to 500 from the start date)
-  let allCommits: any[] = [];
-  for (let page = 1; page <= 5; page++) {
-    const commits =
-      (await limiter.schedule(() =>
-        _fetchLatestCommits(owner, repo, startDate, 100, page),
-      )) || [];
-    allCommits = allCommits.concat(commits);
-    if (
-      commits.length < 100 ||
-      new Date(commits[commits.length - 1].commit.author.date) < startDate
-    ) {
-      break;
-    }
-  }
-  log.info(`In getGithubInfo, latest commits fetched for ${owner}/${repo}`);
+  // Fetch data in parallel where possible
+  const [repoData, contributorsData] = await Promise.all([
+    limiter.schedule(() => _fetchRepoData(owner, repo)),
+    limiter.schedule(() => _fetchContributors(owner, repo))
+  ]);
 
-  log.info(`In getGithubInfo, fetching latest issues for ${owner}/${repo}`);
-  // Fetch latest issues (up to 500 or from the start date)
-  let allIssues: any[] = [];
-  for (let page = 1; page <= 5; page++) {
-    const issues =
-      (await limiter.schedule(() =>
-        _fetchLatestIssues(owner, repo, 100, page, startDate),
-      )) || [];
-    allIssues = allIssues.concat(issues);
-    if (
-      issues.length < 100 ||
-      new Date(issues[issues.length - 1].createdAt) < startDate
-    ) {
-      break;
-    }
-  }
-  log.info(`In getGithubInfo, latest issues fetched for ${owner}/${repo}`);
+  // Fetch license after repo data since it might need it
+  const license = await limiter.schedule(() => _fetchLicense(repoData, owner, repo));
 
-  log.info(`In getGithubInfo, fetching contributors for ${owner}/${repo}`);
-  // Fetch contributors data
-  const contributorsData = await limiter.schedule(() =>
-    _fetchContributors(owner, repo),
-  );
-  log.info(`In getGithubInfo, contributors fetched for ${owner}/${repo}`);
+  // Fetch commits and issues in parallel
+  const [allCommits, allIssues] = await Promise.all([
+    (async () => {
+      let commits: any[] = [];
+      for (let page = 1; page <= 5; page++) {
+        const pageCommits = await limiter.schedule(() => 
+          _fetchLatestCommits(owner, repo, startDate, 100, page)
+        ) || [];
+        commits = commits.concat(pageCommits);
+        if (pageCommits.length < 100 || 
+            new Date(pageCommits[pageCommits.length - 1].commit.author.date) < startDate) {
+          break;
+        }
+      }
+      return commits;
+    })(),
+    (async () => {
+      let issues: any[] = [];
+      for (let page = 1; page <= 5; page++) {
+        const pageIssues = await limiter.schedule(() =>
+          _fetchLatestIssues(owner, repo, 100, page, startDate)
+        ) || [];
+        issues = issues.concat(pageIssues);
+        if (pageIssues.length < 100 ||
+            new Date(pageIssues[pageIssues.length - 1].createdAt) < startDate) {
+          break;
+        }
+      }
+      return issues;
+    })()
+  ]);
 
   // Construct and populate the repository details object
   const repoDetails: RepoDetails = {
@@ -337,16 +318,15 @@ async function _fetchLatestIssues(
 */
 async function _fetchContributors(owner: string, repo: string): Promise<any> {
   try {
-    const contributorsUrl = `${GITHUB_API_URL}/${owner}/${repo}/stats/contributors`;
-    const response = await axios.get(contributorsUrl, {
+    const contributorsUrl = `${GITHUB_API_URL}/${owner}/${repo}/contributors`;
+    const response = await limiter.schedule(() => axios.get(contributorsUrl, {
       headers: {
         Authorization: `token ${process.env.GITHUB_TOKEN}`,
       },
-    });
+    }));
     return response.data || []; // Return just the data array, or empty array if no data
   } catch (error) {
-    log.error(`Failed to fetch contributors for ${owner}/${repo}:`, error);
-    return []; // Return empty array on error instead of throwing
+    return _handleError(error, `Failed to fetch contributors for ${owner}/${repo}`);
   }
 }
 

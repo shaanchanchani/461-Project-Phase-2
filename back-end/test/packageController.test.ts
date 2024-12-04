@@ -1,57 +1,33 @@
 import { Request, Response } from 'express';
 import { PackageController } from '../src/controllers/packageController';
-import { PackageService } from '../src/services/packageService';
-import { PackageUploadService } from '../src/services/packageUploadService';
 import { AuthenticatedRequest } from '../src/middleware/auth';
-import { PackageTableItem } from '../src/types';
+import { Package } from '../src/types';
 
-jest.mock('../src/services/packageService');
+jest.mock('../src/services/packageDownloadService');
 jest.mock('../src/services/packageUploadService');
+jest.mock('../src/services/packageService');
 jest.mock('../src/logger');
 
 describe('PackageController', () => {
+    let packageController: PackageController;
     let mockReq: Partial<AuthenticatedRequest>;
     let mockRes: Partial<Response>;
-    let packageController: PackageController;
-    let mockPackageService: jest.Mocked<PackageService>;
-    let mockPackageUploadService: jest.Mocked<PackageUploadService>;
 
     beforeEach(() => {
+        packageController = new PackageController();
         mockReq = {
-            body: {},
-            params: {}
+            params: {},
+            user: { name: 'testUser', isAdmin: false }
         };
         mockRes = {
             status: jest.fn().mockReturnThis(),
             json: jest.fn()
         };
-        mockPackageService = {
-            getPackageById: jest.fn(),
-            getPackageByName: jest.fn(),
-            listPackages: jest.fn(),
-            resetRegistry: jest.fn(),
-        } as unknown as jest.Mocked<PackageService>;
-
-        mockPackageUploadService = {
-            uploadPackageFromUrl: jest.fn(),
-        } as unknown as jest.Mocked<PackageUploadService>;
-
-        // Inject mock services
-        packageController = new PackageController(mockPackageService);
-        // @ts-ignore - Inject mock upload service
-        packageController.packageUploadService = mockPackageUploadService;
     });
 
     describe('createPackage', () => {
-        it('should create a package successfully', async () => {
-            const mockPackageData = {
-                URL: 'https://github.com/owner/repo',
-                JSProgram: 'test-program',
-                debloat: false
-            };
-            mockReq.body = mockPackageData;
-
-            const mockResponse = {
+        it('should create package from URL successfully', async () => {
+            const mockPackage = {
                 metadata: {
                     Name: 'test-package',
                     Version: '1.0.0',
@@ -63,101 +39,151 @@ describe('PackageController', () => {
                 }
             };
 
-            mockPackageUploadService.uploadPackageFromUrl.mockResolvedValue(mockResponse);
+            mockReq.body = {
+                URL: 'https://github.com/test/repo',
+                JSProgram: 'test-program'
+            };
+
+            // @ts-ignore - Mock upload service
+            packageController.packageUploadService = {
+                uploadPackageFromUrl: jest.fn().mockResolvedValue(mockPackage)
+            };
 
             await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
 
-            expect(mockPackageUploadService.uploadPackageFromUrl).toHaveBeenCalledWith(
-                mockPackageData.URL,
-                mockPackageData.JSProgram,
-                mockPackageData.debloat
-            );
             expect(mockRes.status).toHaveBeenCalledWith(201);
-            expect(mockRes.json).toHaveBeenCalledWith(mockResponse);
+            expect(mockRes.json).toHaveBeenCalledWith(mockPackage);
         });
 
-        it('should return 400 if URL is missing', async () => {
+        it('should create package from Content successfully', async () => {
+            const mockPackage = {
+                metadata: {
+                    Name: 'test-package',
+                    Version: '1.0.0',
+                    ID: '123'
+                },
+                data: {
+                    Content: 'base64-content',
+                    JSProgram: 'test-program'
+                }
+            };
+
+            mockReq.body = {
+                Content: 'base64-content',
+                JSProgram: 'test-program'
+            };
+
+            // @ts-ignore - Mock upload service
+            packageController.packageUploadService = {
+                uploadPackageFromZip: jest.fn().mockResolvedValue(mockPackage)
+            };
+
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(201);
+            expect(mockRes.json).toHaveBeenCalledWith(mockPackage);
+        });
+
+        it('should return 401 if user not authenticated', async () => {
+            mockReq.user = undefined;
+            mockReq.body = { URL: 'https://github.com/test/repo' };
+
+            await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(401);
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'User not authenticated' });
+        });
+
+        it('should return 400 if neither URL nor Content provided', async () => {
             mockReq.body = { JSProgram: 'test-program' };
 
             await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
 
             expect(mockRes.status).toHaveBeenCalledWith(400);
-            expect(mockRes.json).toHaveBeenCalledWith({ error: 'URL is required' });
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Either URL or Content must be provided' });
         });
 
-        it('should handle errors from upload service', async () => {
-            mockReq.body = { URL: 'https://github.com/owner/repo' };
-            const error = new Error('Upload failed');
-            mockPackageUploadService.uploadPackageFromUrl.mockRejectedValue(error);
+        it('should return 400 if both URL and Content provided', async () => {
+            mockReq.body = {
+                URL: 'https://github.com/test/repo',
+                Content: 'base64-content'
+            };
 
             await packageController.createPackage(mockReq as AuthenticatedRequest, mockRes as Response);
 
             expect(mockRes.status).toHaveBeenCalledWith(400);
-            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Upload failed' });
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Cannot provide both URL and Content' });
         });
     });
 
-    describe('getPackage', () => {
-        it('should get a package successfully', async () => {
+    describe('getPackageById', () => {
+        const mockPackage: Package = {
+            metadata: {
+                Name: 'test-package',
+                Version: '1.0.0',
+                ID: '123'
+            },
+            data: {
+                Content: 'base64-content'
+            }
+        };
+
+        it('should get package successfully', async () => {
             mockReq.params = { id: '123' };
-            const packageData: PackageTableItem = {
-                package_id: '123',
-                name: 'test-package',
-                latest_version: '1.0.0',
-                description: 'Test package',
-                created_at: new Date().toISOString(),
-                user_id: 'test-user'
+            // @ts-ignore - Mock download service
+            packageController.packageDownloadService = {
+                getPackageById: jest.fn().mockResolvedValue(mockPackage)
             };
 
-            mockPackageService.getPackageById.mockResolvedValue(packageData);
+            await packageController.getPackageById(mockReq as AuthenticatedRequest, mockRes as Response);
 
-            await packageController.getPackage(mockReq as AuthenticatedRequest, mockRes as Response);
-
-            expect(mockPackageService.getPackageById).toHaveBeenCalledWith('123');
             expect(mockRes.status).toHaveBeenCalledWith(200);
-            expect(mockRes.json).toHaveBeenCalledWith(packageData);
+            expect(mockRes.json).toHaveBeenCalledWith(mockPackage);
+        });
+
+        it('should return 401 if user not authenticated', async () => {
+            mockReq.user = undefined;
+            mockReq.params = { id: '123' };
+
+            await packageController.getPackageById(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(401);
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'User not authenticated' });
+        });
+
+        it('should return 400 if package ID format invalid', async () => {
+            mockReq.params = { id: '123!@#' }; // Invalid format
+
+            await packageController.getPackageById(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(400);
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid package ID format' });
         });
 
         it('should return 404 if package not found', async () => {
             mockReq.params = { id: '123' };
-            mockPackageService.getPackageById.mockResolvedValue(null);
+            // @ts-ignore - Mock download service
+            packageController.packageDownloadService = {
+                getPackageById: jest.fn().mockResolvedValue(null)
+            };
 
-            await packageController.getPackage(mockReq as AuthenticatedRequest, mockRes as Response);
+            await packageController.getPackageById(mockReq as AuthenticatedRequest, mockRes as Response);
 
             expect(mockRes.status).toHaveBeenCalledWith(404);
             expect(mockRes.json).toHaveBeenCalledWith({ error: 'Package not found' });
         });
 
-        it('should handle errors', async () => {
+        it('should return 404 if package content not found', async () => {
             mockReq.params = { id: '123' };
-            mockPackageService.getPackageById.mockRejectedValue(new Error('Database error'));
-
-            await packageController.getPackage(mockReq as AuthenticatedRequest, mockRes as Response);
-
-            expect(mockRes.status).toHaveBeenCalledWith(500);
-            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Failed to retrieve package' });
-        });
-    });
-
-    describe('getPackageByName', () => {
-        it('should get a package by name successfully', async () => {
-            mockReq.params = { name: 'test-package' };
-            const packageData: PackageTableItem = {
-                package_id: '123',
-                name: 'test-package',
-                latest_version: '1.0.0',
-                description: 'Test package',
-                created_at: new Date().toISOString(),
-                user_id: 'test-user'
+            // @ts-ignore - Mock download service
+            packageController.packageDownloadService = {
+                getPackageById: jest.fn().mockRejectedValue(new Error('Package content not found'))
             };
 
-            mockPackageService.getPackageByName.mockResolvedValue(packageData);
+            await packageController.getPackageById(mockReq as AuthenticatedRequest, mockRes as Response);
 
-            await packageController.getPackageByName(mockReq as AuthenticatedRequest, mockRes as Response);
-
-            expect(mockPackageService.getPackageByName).toHaveBeenCalledWith('test-package');
-            expect(mockRes.status).toHaveBeenCalledWith(200);
-            expect(mockRes.json).toHaveBeenCalledWith(packageData);
+            expect(mockRes.status).toHaveBeenCalledWith(404);
+            expect(mockRes.json).toHaveBeenCalledWith({ error: 'Package content not found' });
         });
     });
 });

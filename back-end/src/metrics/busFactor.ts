@@ -29,7 +29,7 @@ export function calculateBusFactor(metrics: RepoDetails): number {
   let totalCommits = 0;
   for (let i = 0; i < metrics.contributorsData.length; i++) {
     const contributor = metrics.contributorsData[i];
-    totalCommits += contributor.total || 0;
+    totalCommits += contributor.contributions || 0;
   }
 
   // Check if there are any commits available
@@ -43,15 +43,15 @@ export function calculateBusFactor(metrics: RepoDetails): number {
 
   // Sort contributors in descending order of commits
   let sortedCommitCounts = metrics.contributorsData.sort(
-    (a, b) => b.total - a.total,
+    (a, b) => (b.contributions || 0) - (a.contributions || 0),
   );
   // Filter out contributors with less than 0.5% of total commits -> outliers
   sortedCommitCounts = sortedCommitCounts.filter(
-    (contributor) => contributor.total >= 0.005 * totalCommits,
+    (contributor) => (contributor.contributions || 0) >= 0.005 * totalCommits,
   );
   // Update total commits and total contributors
   totalCommits = sortedCommitCounts.reduce(
-    (total, contributor) => total + contributor.total,
+    (total, contributor) => total + (contributor.contributions || 0),
     0,
   );
   totalContributors = sortedCommitCounts.length;
@@ -64,7 +64,7 @@ export function calculateBusFactor(metrics: RepoDetails): number {
   let numCoreContributors = 0;
   const threshold = 0.8;
   for (const contributor of sortedCommitCounts) {
-    cumulativeContribution += contributor.total / totalCommits;
+    cumulativeContribution += (contributor.contributions || 0) / totalCommits;
     numCoreContributors++;
     if (cumulativeContribution >= threshold) {
       break;

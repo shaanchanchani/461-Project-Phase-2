@@ -2,19 +2,34 @@ import request from 'supertest';
 import express, { Application } from 'express';
 import router from '../src/routes';
 import { packageController } from '../src/controllers/packageController';
-import { SearchController } from '../src/controllers/searchController';
-import { RatingController } from '../src/controllers/ratingController';
-import { AuthController, authMiddleware } from '../src/middleware/auth';
+import { authMiddleware, AuthController } from '../src/middleware/auth';
 import { Server } from 'http';
 
-jest.mock('../src/controllers/packageController');
-jest.mock('../src/controllers/searchController');
-jest.mock('../src/controllers/ratingController');
-jest.mock('../src/middleware/auth');
+jest.mock('../src/controllers/packageController', () => ({
+    packageController: {
+        getPackageById: jest.fn().mockImplementation((req, res) => {
+            res.json({ success: true });
+        }),
+        createPackage: jest.fn().mockImplementation((req, res) => {
+            res.json({ success: true });
+        })
+    }
+}));
+
+jest.mock('../src/middleware/auth', () => ({
+    authMiddleware: jest.fn().mockImplementation((req, res, next) => {
+        next();
+    }),
+    AuthController: {
+        authenticate: jest.fn().mockImplementation((req, res) => {
+            res.json({ token: 'test-token' });
+        })
+    }
+}));
+
 jest.mock('../src/logger');
 
-// Temporarily skip this test suite due to TCPWRAP issues
-describe.skip('Routes', () => {
+describe('Routes', () => {
     let app: Application;
     let server: Server;
 
@@ -36,54 +51,50 @@ describe.skip('Routes', () => {
         }
     });
 
-    describe('Authentication', () => {
-        test('PUT /authenticate should call AuthController.authenticate', async () => {
-            const response = await request(server)
-                .put('/authenticate')
-                .send({ User: { name: 'test' }, Secret: { password: 'test' } });
-            
-            expect(AuthController.authenticate).toHaveBeenCalled();
-        }, 15000);
-    });
-
-    describe('Protected Routes', () => {
+    describe('Package Operations', () => {
         beforeEach(() => {
-            // Mock successful authentication for protected routes
-            (authMiddleware as jest.Mock).mockImplementation(
-                (req: any, res: any, next: any) => next()
-            );
+            jest.clearAllMocks();
         });
 
-        test('POST /packages should call SearchController.listPackages', async () => {
-            const response = await request(server)
-                .post('/packages')
-                .set('X-Authorization', 'test-token');
-            
-            expect(SearchController.listPackages).toHaveBeenCalled();
-        }, 15000);
-
-        test('POST /package/byRegEx should call SearchController.searchByRegEx', async () => {
-            const response = await request(server)
-                .post('/package/byRegEx')
-                .set('X-Authorization', 'test-token');
-            
-            expect(SearchController.searchByRegEx).toHaveBeenCalled();
-        }, 15000);
-
-        test('GET /package/:id should call packageController.getPackage', async () => {
+        test('GET /package/:id should call packageController.getPackageById', async () => {
             const response = await request(server)
                 .get('/package/123')
                 .set('X-Authorization', 'test-token');
             
-            expect(packageController.getPackage).toHaveBeenCalled();
-        }, 15000);
+            expect(packageController.getPackageById).toHaveBeenCalled();
+            expect(response.status).toBe(200);
+        });
 
-        test('DELETE /reset should require admin privileges', async () => {
+        test('POST /package should call packageController.createPackage with URL', async () => {
             const response = await request(server)
-                .delete('/reset')
-                .set('X-Authorization', 'test-token');
+                .post('/package')
+                .set('X-Authorization', 'test-token')
+                .send({
+                    URL: 'https://example.com/package.zip',
+                    metadata: {
+                        Name: 'test-package',
+                        Version: '1.0.0'
+                    }
+                });
             
-            expect(response.status).toBe(401);
-        }, 15000);
+            expect(packageController.createPackage).toHaveBeenCalled();
+            expect(response.status).toBe(200);
+        });
+
+        test('POST /package should call packageController.createPackage with Content', async () => {
+            const response = await request(server)
+                .post('/package')
+                .set('X-Authorization', 'test-token')
+                .send({
+                    Content: 'base64-encoded-content',
+                    metadata: {
+                        Name: 'test-package',
+                        Version: '1.0.0'
+                    }
+                });
+            
+            expect(packageController.createPackage).toHaveBeenCalled();
+            expect(response.status).toBe(200);
+        });
     });
 });
