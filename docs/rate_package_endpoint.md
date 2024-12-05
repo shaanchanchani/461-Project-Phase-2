@@ -6,7 +6,7 @@ Method: GET
 
 Description:
 ------------
-This endpoint retrieves the rating metrics for a package in the registry based on the specified package ID.
+This endpoint retrieves the rating metrics for a package in the registry based on the specified package ID. The rating system evaluates various aspects of the package's quality, maintenance, and usability.
 
 Authentication:
 --------------
@@ -17,7 +17,13 @@ Authentication:
 Request:
 --------
 1. Parameters:
-   - `id` (string, required): ID of the package to rate.
+   - `id` (string, required): UUID of the package to rate
+
+2. Example Curl Command:
+   ```bash
+   curl -X GET "http://localhost:3000/package/{id}/rate" \
+     -H "X-Authorization: bearer <your_token_here>"
+   ```
 
 Response:
 ---------
@@ -46,14 +52,57 @@ Response:
      }
      ```
 
-2. Error (400 Bad Request):
-   - Description: Missing field(s) in the PackageID.
+2. Error Responses:
 
-3. Error (403 Forbidden):
-   - Description: Authentication failed due to invalid or missing AuthenticationToken.
+   400 Bad Request:
+   ```json
+   {
+     "error": "Bad Request",
+     "message": "Invalid package ID format"
+   }
+   ```
 
-4. Error (404 Not Found):
-   - Description: Package does not exist.
+   403 Forbidden:
+   ```json
+   {
+     "error": "Forbidden",
+     "message": "Invalid or missing authentication token"
+   }
+   ```
 
-5. Error (500 Internal Server Error):
-   - Description: The package rating system failed to compute one or more metrics.
+   404 Not Found:
+   ```json
+   {
+     "error": "Not Found",
+     "message": "Package with ID '{id}' does not exist"
+   }
+   ```
+
+   500 Internal Server Error:
+   ```json
+   {
+     "error": "Internal Server Error",
+     "message": "Failed to compute package metrics"
+   }
+   ```
+
+Metric Descriptions:
+------------------
+- **NetScore**: Overall package quality score (0-1)
+- **BusFactor**: Measure of project's contributor distribution and risk (0-1)
+- **Correctness**: Code quality and test coverage assessment (0-1)
+- **RampUp**: Ease of getting started with the package (0-1)
+- **ResponsiveMaintainer**: Maintainer's response time and activity (0-1)
+- **LicenseScore**: License compatibility and compliance (0-1)
+- **GoodPinningPractice**: Dependency version management quality (0-1)
+- **PullRequest**: Pull request process and review quality (0-1)
+
+Latency metrics indicate the time taken to compute each corresponding metric.
+
+Notes:
+------
+1. All metric scores are normalized between 0 and 1
+2. Higher scores indicate better quality
+3. Latency values are in seconds
+4. The endpoint may take longer to respond for larger packages
+5. Rate limiting: Maximum 100 requests per hour per authenticated user

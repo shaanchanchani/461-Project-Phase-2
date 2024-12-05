@@ -1,89 +1,58 @@
 // src/services/ratingService.ts
 import { log } from '../logger';
-import { GetNetScore } from '../metrics/netScore';
-import { PackageRating, PackageCost } from '../types';
-import { checkUrlType, processUrl, UrlType } from '../utils/urlUtils';
+import { PackageRating } from '../types';
+import { MetricService } from './metricService';
+import { DynamoDBService, dynamoDBService } from './dynamoDBService';
 
 export class RatingService {
-    static async calculateRating(packageId: string): Promise<PackageRating> {
+    private metricService: MetricService;
+    private db: DynamoDBService;
+
+    constructor(metricService?: MetricService, db?: DynamoDBService) {
+        this.metricService = metricService || new MetricService();
+        this.db = db || dynamoDBService;
+    }
+
+    async calculateRating(packageId: string): Promise<PackageRating> {
         try {
-            // Get package URL from your storage system using packageId
-            const packageUrl = await this.getPackageUrl(packageId);
-            
-            // Check URL type and process it
-            const urlType = checkUrlType(packageUrl);
-            if (urlType === UrlType.Invalid) {
-                throw new Error('Invalid package URL');
+            if (!packageId) {
+                throw new Error('Missing package ID');
             }
 
-            // Process URL to get owner and repo
-            const { owner, repo } = await processUrl(urlType, packageUrl);
-            
-            log.info(`Calculating metrics for ${owner}/${repo}`);
-            const scores = await GetNetScore(owner, repo, packageUrl);
-            
-            if (!scores) {
-                throw new Error('Failed to calculate package metrics');
+            // Get the latest version for the package
+            const latestVersion = await this.db.getLatestPackageVersion(packageId);
+            if (!latestVersion) {
+                throw new Error('Package not found');
             }
 
+            // Get metrics using the version ID
+            const metrics = await this.metricService.getMetricsByVersionId(latestVersion.version_id);
+            if (!metrics) {
+                throw new Error('Metrics not found for package');
+            }
+
+            // Return metrics in the format specified by the API
             return {
-                BusFactor: scores.BusFactor,
-                BusFactorLatency: scores.BusFactor_Latency,
-                Correctness: scores.Correctness,
-                CorrectnessLatency: scores.Correctness_Latency,
-                RampUp: scores.RampUp,
-                RampUpLatency: scores.RampUp_Latency,
-                ResponsiveMaintainer: scores.ResponsiveMaintainer,
-                ResponsiveMaintainerLatency: scores.ResponsiveMaintainer_Latency,
-                LicenseScore: scores.License,
-                LicenseScoreLatency: scores.License_Latency,
-                NetScore: scores.NetScore,
-                NetScoreLatency: scores.NetScore_Latency,
-                GoodPinningPractice: -1, 
-                PullRequest: -1, 
-                GoodPinningPracticeLatency: -1,
-                PullRequestLatency: -1
+                BusFactor: metrics.bus_factor,
+                BusFactorLatency: metrics.bus_factor_latency,
+                Correctness: metrics.correctness,
+                CorrectnessLatency: metrics.correctness_latency,
+                RampUp: metrics.ramp_up,
+                RampUpLatency: metrics.ramp_up_latency,
+                ResponsiveMaintainer: metrics.responsive_maintainer,
+                ResponsiveMaintainerLatency: metrics.responsive_maintainer_latency,
+                LicenseScore: metrics.license_score,
+                LicenseScoreLatency: metrics.license_score_latency,
+                GoodPinningPractice: metrics.good_pinning_practice,
+                GoodPinningPracticeLatency: metrics.good_pinning_practice_latency,
+                PullRequest: metrics.pull_request,
+                PullRequestLatency: metrics.pull_request_latency,
+                NetScore: metrics.net_score,
+                NetScoreLatency: metrics.net_score_latency
             };
         } catch (error) {
-            log.error('Error calculating rating:', error);
+            log.error('Error calculating package rating:', error);
             throw error;
         }
-    }
-
-    static async calculateCost(packageId: string, includeDependencies: boolean): Promise<PackageCost> {
-        try {
-            // Get package details from your storage system
-            const packageUrl = await this.getPackageUrl(packageId);
-            
-            // 1. Get the package size
-            // 2. If includeDependencies is true, get and calculate dependency sizes
-            // 3. Convert sizes to costs
-
-            // Example response structure:
-            const response: PackageCost = {
-                [packageId]: {
-                    totalCost: 0 // Replace with actual calculation
-                }
-            };
-
-            if (includeDependencies) {
-                response[packageId].standaloneCost = 0; // Replace with actual calculation
-                // Add dependency costs to response
-            }
-
-            return response;
-        } catch (error) {
-            log.error('Error calculating package cost:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Gets the package URL from your storage system
-     * This needs to be implemented based on how you're storing package data
-     */
-    private static async getPackageUrl(packageId: string): Promise<string> {
-        // TODO: Implement this to retrieve package URL from your storage
-        throw new Error('getPackageUrl not implemented');
     }
 }

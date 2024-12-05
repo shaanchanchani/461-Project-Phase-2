@@ -108,32 +108,32 @@ export async function GetNetScore(
 
     return {
       URL: url,
-      NetScore: parseFloat(NetScore.toFixed(3)),
-      NetScore_Latency: parseFloat(net_time.toFixed(3)),
-      RampUp: parseFloat(rampUpTime.value.toFixed(3)),
-      RampUp_Latency: parseFloat(
+      net_score: parseFloat(NetScore.toFixed(3)),
+      net_score_latency: parseFloat(net_time.toFixed(3)),
+      ramp_up: parseFloat(rampUpTime.value.toFixed(3)),
+      ramp_up_latency: parseFloat(
         (rampUpTime.latency + api_time + clone_time).toFixed(3),
       ),
-      Correctness: parseFloat(correctnessScore.value.toFixed(3)),
-      Correctness_Latency: parseFloat(
+      correctness: parseFloat(correctnessScore.value.toFixed(3)),
+      correctness_latency: parseFloat(
         (correctnessScore.latency + api_time + clone_time).toFixed(3),
       ),
-      BusFactor: parseFloat(busFactor.value.toFixed(3)),
-      BusFactor_Latency: parseFloat((busFactor.latency + api_time).toFixed(3)),
-      ResponsiveMaintainer: parseFloat(responsiveness.value.toFixed(3)),
-      ResponsiveMaintainer_Latency: parseFloat(
+      bus_factor: parseFloat(busFactor.value.toFixed(3)),
+      bus_factor_latency: parseFloat((busFactor.latency + api_time).toFixed(3)),
+      responsive_maintainer: parseFloat(responsiveness.value.toFixed(3)),
+      responsive_maintainer_latency: parseFloat(
         (responsiveness.latency + api_time).toFixed(3),
       ),
-      License: parseFloat(licenseCompatibility.value.toFixed(3)),
-      License_Latency: parseFloat(
+      license_score: parseFloat(licenseCompatibility.value.toFixed(3)),
+      license_score_latency: parseFloat(
         (licenseCompatibility.latency + api_time).toFixed(3),
       ),
-      PinnedDependencies: parseFloat(pinnedDependencies.value.toFixed(3)),
-      PinnedDependencies_Latency: parseFloat(
+      good_pinning_practice: parseFloat(pinnedDependencies.value.toFixed(3)),
+      good_pinning_practice_latency: parseFloat(
         (pinnedDependencies.latency + api_time).toFixed(3),
       ),
-      PullRequestReview: parseFloat(pullRequestReview.value.toFixed(3)),
-      PullRequestReview_Latency: parseFloat(
+      pull_request: parseFloat(pullRequestReview.value.toFixed(3)),
+      pull_request_latency: parseFloat(
         (pullRequestReview.latency + api_time).toFixed(3),
       ),
     };

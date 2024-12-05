@@ -478,15 +478,22 @@ export class PackageUploadService {
     net_score: number;
     bus_factor: number;
     ramp_up: number;
+    responsive_maintainer: number;
     license_score: number;
+    good_pinning_practice: number;
+    pull_request: number;
     correctness: number;
-    dependency_pinning: number;
-    pull_request_review: number;
+    bus_factor_latency: number;
+    ramp_up_latency: number;
+    responsive_maintainer_latency: number;
+    license_score_latency: number;
+    good_pinning_practice_latency: number;
+    pull_request_latency: number;
+    correctness_latency: number;
+    net_score_latency: number;
   }> {
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 2000; // 2 seconds
-
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -518,28 +525,36 @@ export class PackageUploadService {
           if (attempt === MAX_RETRIES) {
             throw new Error('Failed to calculate package metrics after all retries');
           }
-          await sleep(RETRY_DELAY);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
           continue;
         }
 
         // You can adjust this threshold based on your requirements
         const MINIMUM_NET_SCORE = 0.5;
         
-        if (metrics.NetScore < MINIMUM_NET_SCORE) {
-          throw new Error(`Package does not meet quality requirements. Net score: ${metrics.NetScore}`);
+        if (metrics.net_score < MINIMUM_NET_SCORE) {
+          throw new Error(`Package does not meet quality requirements. Net score: ${metrics.net_score}`);
         }
 
-        log.info(`Package metrics check passed. Net score: ${metrics.NetScore}`);
+        log.info(`Package metrics check passed. Net score: ${metrics.net_score}`);
 
-        // Return metrics in the format needed for storage
         return {
-          net_score: metrics.NetScore,
-          bus_factor: metrics.BusFactor || 0,
-          ramp_up: metrics.RampUp || 0,
-          license_score: metrics.License || 0,
-          correctness: metrics.Correctness || 0,
-          dependency_pinning: metrics.PinnedDependencies || 0,
-          pull_request_review: metrics.PullRequestReview || 0
+          net_score: metrics.net_score,
+          bus_factor: metrics.bus_factor,
+          ramp_up: metrics.ramp_up,
+          responsive_maintainer: metrics.responsive_maintainer,
+          license_score: metrics.license_score,
+          good_pinning_practice: metrics.good_pinning_practice,
+          pull_request: metrics.pull_request,
+          correctness: metrics.correctness,
+          bus_factor_latency: metrics.bus_factor_latency,
+          ramp_up_latency: metrics.ramp_up_latency,
+          responsive_maintainer_latency: metrics.responsive_maintainer_latency,
+          license_score_latency: metrics.license_score_latency,
+          good_pinning_practice_latency: metrics.good_pinning_practice_latency,
+          pull_request_latency: metrics.pull_request_latency,
+          correctness_latency: metrics.correctness_latency,
+          net_score_latency: metrics.net_score_latency
         };
       } catch (error: any) {
         log.error(`Attempt ${attempt}: Error checking package metrics:`, error);
@@ -554,7 +569,7 @@ export class PackageUploadService {
           if (attempt === MAX_RETRIES) {
             throw new Error(`GitHub API error after ${MAX_RETRIES} retries: ${error.message}`);
           }
-          await sleep(RETRY_DELAY);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
           continue;
         }
         
