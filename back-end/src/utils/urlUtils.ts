@@ -28,21 +28,27 @@ export function checkUrlType(url: string): UrlType {
   // Updated patterns to be more flexible
   const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/[^\/]+)?\/?$/;
   const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)(?:\/v\/([^\/]+))?\/?$/;
-
+  const npmRegistryPattern = /^(?:https?:\/\/)?registry\.npmjs\.org\/[^\/]+(?:\/[^\/]+)?$/;
+  
   log.info(`Testing URL against patterns:
     GitHub: ${githubPattern.test(url)}
-    npm: ${npmPattern.test(url)}`);
+    npm: ${npmPattern.test(url)}
+    Registry: ${npmRegistryPattern.test(url)}`);
+    
 
+  // Check patterns and return URL type
   if (githubPattern.test(url)) {
     log.info(`URL identified as GitHub URL.`);
     return UrlType.GitHub;
-  } else if (npmPattern.test(url)) {
+  }
+
+  if (npmPattern.test(url) || npmRegistryPattern.test(url)) {
     log.info(`URL identified as npm URL.`);
     return UrlType.npm;
-  } else {
-    log.warn(`Invalid URL type detected.`);
-    return UrlType.Invalid;
   }
+
+  log.warn(`Invalid URL type detected.`);
+  return UrlType.Invalid;
 }
 
 /*

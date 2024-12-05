@@ -29,6 +29,7 @@ export class PackageUploadService {
       // Validate URL
       this.validateUrl(url);
       const urlType = checkUrlType(url);
+      log.info(`Detected URL Type: ${urlType}`);
       if (urlType === UrlType.Invalid) {
         throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo or github.com/owner/repo/tree/version) or npm (npmjs.com/package/name) URL');
       }
@@ -265,10 +266,18 @@ export class PackageUploadService {
 
   private validateUrl(url: string): void {
     const urlObj = new URL(url);
-    if (urlObj.hostname !== 'github.com' && urlObj.hostname !== 'www.npmjs.com') {
-      throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo or github.com/owner/repo/tree/version) or npm (npmjs.com/package/name) URL');
+    console.log('URL:', url);               // Log the input URL
+    console.log('Hostname:', urlObj.hostname); // Log the parsed hostname
+    
+    if (
+        urlObj.hostname !== 'github.com' &&
+        urlObj.hostname !== 'www.npmjs.com' &&
+        urlObj.hostname !== 'registry.npmjs.org'
+    ) {
+        throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo or github.com/owner/repo/tree/version) or npm (npmjs.com/package/name) URL');
     }
-  }
+}
+
 
   private async extractPackageInfo(url: string): Promise<{ name: string; version: string; description: string }> {
     const urlObj = new URL(url);
@@ -419,60 +428,92 @@ export class PackageUploadService {
 
   private async handleNpmUrl(url: string): Promise<string> {
     try {
-      log.info('Processing npm URL...');
-      const packagePath = url.split('/package/')[1];
+        log.info('Processing npm URL...');
 
-      // Handle scoped packages with versions
-      let packageName, version;
-      if (packagePath.startsWith('@')) {
-        // Scoped package
-        const scopedParts = packagePath.split('@');
-        if (scopedParts.length === 3) {
-          // Has version
-          packageName = `@${scopedParts[1]}`;
-          version = scopedParts[2];
+        // Extract package name and version from the URL
+        let packageName: string | undefined;
+        let version: string | undefined;
+
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+
+        // Determine if the URL is npmjs.com or registry.npmjs.org
+        if (urlObj.hostname === 'www.npmjs.com' || urlObj.hostname === 'npmjs.com') {
+            // Handle URLs like npmjs.com/react or npmjs.com/react/v/18.2.0
+            [packageName, version] = pathParts.length >= 2
+                ? [pathParts[1], pathParts[2]]
+                : [pathParts[1], undefined];
+        } else if (urlObj.hostname === 'registry.npmjs.org') {
+            // Handle URLs like registry.npmjs.org/react/18.2.0
+            [packageName, version] = pathParts.length >= 2
+                ? [pathParts[0], pathParts[1]]
+                : [pathParts[0], undefined];
         } else {
-          // No version
-          packageName = scopedParts[0];
-          version = scopedParts[1];
+            throw new Error(
+                'Invalid NPM URL format. Supported formats:\n' +
+                '- npmjs.com/package/name or npmjs.com/package/name/version\n' +
+                '- registry.npmjs.org/name/version'
+            );
         }
-      } else {
-        // Non-scoped package
-        [packageName, version] = packagePath.split('@');
-      }
 
-      // Fetch package info
-      const npmUrl = `https://registry.npmjs.org/${packageName}`;
-      const response = await axios.get(npmUrl);
+        if (!packageName) {
+            throw new Error('Package name could not be extracted from the URL.');
+        }
 
-      // Get the specific version data if available
-      const repositoryUrl = response.data.repository?.url;
+        log.info(`Extracted package name: ${packageName}, version: ${version || 'latest'}`);
 
-      if (!repositoryUrl) {
-        throw new Error(`GitHub repository URL not found for ${packageName}`);
-      }
+        // Fetch package info from NPM registry
+        const npmUrl = `https://registry.npmjs.org/${packageName}`;
+        const response = await axios.get(npmUrl);
 
-      const sanitizedUrl = repositoryUrl
-        .replace("git+", "")
-        .replace(".git", "")
-        .replace("git:", "")
-        .replace('git@github.com:', 'https://github.com/')
-        .replace('git+https://github.com/', 'https://github.com/')
-        .replace('git+ssh://git@github.com/', 'https://github.com/');
+        // Extract GitHub repository URL
+        const repositoryUrl = response.data.repository?.url;
+        if (!repositoryUrl) {
+            throw new Error(`GitHub repository URL not found for ${packageName}`);
+        }
 
-      
-      if (version) {
-        const sanitizedVersionUrl = `${sanitizedUrl}/tree/v${version}`;
-        log.info(`Using version-specific URL: ${sanitizedVersionUrl}`);
-        return sanitizedVersionUrl;
-      } 
-      log.info(`Using default URL: ${sanitizedUrl}`);
-      return sanitizedUrl;
+        const sanitizedUrl = repositoryUrl
+            .replace("git+", "")
+            .replace(".git", "")
+            .replace("git:", "")
+            .replace('git@github.com:', 'https://github.com/')
+            .replace('git+https://github.com/', 'https://github.com/')
+            .replace('git+ssh://git@github.com/', 'https://github.com/');
+
+        log.info(`Sanitized GitHub repository URL: ${sanitizedUrl}`);
+
+        // Check if the version exists as a tag or branch
+        if (version) {
+            const [owner, repo] = new URL(sanitizedUrl).pathname.split('/').filter(Boolean);
+            const tagsResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/tags`, {
+                headers: this.githubHeaders,
+            });
+            const branchesResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/branches`, {
+                headers: this.githubHeaders,
+            });
+
+            const tags = tagsResponse.data.map((tag: any) => tag.name);
+            const branches = branchesResponse.data.map((branch: any) => branch.name);
+
+            if (tags.includes(version) || branches.includes(version)) {
+                return `${sanitizedUrl}/tree/${version}`;
+            } else if (tags.includes(`v${version}`) || branches.includes(`v${version}`)) {
+                return `${sanitizedUrl}/tree/v${version}`;
+            } else {
+                log.warn(`Version ${version} not found as a tag or branch in ${sanitizedUrl}`);
+                // Return default GitHub URL without version
+                return sanitizedUrl;
+            }
+        }
+
+        log.info(`Using default GitHub repository URL: ${sanitizedUrl}`);
+        return sanitizedUrl;
     } catch (error: any) {
-      log.error('Error in handleNpmUrl:', error);
-      throw error;
+        log.error(`Error in handleNpmUrl: ${error.message}`);
+        throw error;
     }
-  }
+}
+
 
   private async checkPackageMetrics(url: string): Promise<{
     net_score: number;
