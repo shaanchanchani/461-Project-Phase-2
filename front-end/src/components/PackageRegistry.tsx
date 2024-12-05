@@ -104,14 +104,18 @@ const PackageRegistry: React.FC = () => {
   const validateUrl = (url: string): boolean => {
     try {
       // Use the same patterns as the backend
-      const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)\/?(?:\.git)?$/;
-      const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)\/?$/;
+      const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/[^\/]+\/[^\/]+(?:\/tree\/[^\/]+)?\/?$/;
+      const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/[^\/]+\/?$/;
+      const npmRegistryPattern = /^(?:https?:\/\/)?registry\.npmjs\.org\/[^\/]+(?:\/[^\/]+)?$/;
+
+
 
       console.log('Validating URL:', url);
       console.log('GitHub pattern test:', githubPattern.test(url));
       console.log('npm pattern test:', npmPattern.test(url));
+      console.log('npm Registry test', npmRegistryPattern.test(url));
 
-      return githubPattern.test(url) || npmPattern.test(url);
+      return githubPattern.test(url) || npmPattern.test(url) || npmRegistryPattern.test(url);
     } catch (error) {
       console.error('URL validation error:', error);
       return false;
