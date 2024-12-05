@@ -186,4 +186,137 @@ describe('PackageController', () => {
             expect(mockRes.json).toHaveBeenCalledWith({ error: 'Package content not found' });
         });
     });
+
+    describe('resetRegistry', () => {
+        let mockResetService: jest.Mocked<any>;
+
+        beforeEach(() => {
+            // Reset mocks before each test
+            mockReq = {
+                params: {},
+                user: { name: 'testUser', isAdmin: false }
+            };
+            mockRes = {
+                status: jest.fn().mockReturnThis(),
+                json: jest.fn()
+            };
+            
+            // Create mock reset service
+            mockResetService = {
+                resetRegistry: jest.fn().mockResolvedValue(undefined)
+            };
+
+            // Create controller instance with mock service
+            packageController = new PackageController(
+                undefined,
+                undefined,
+                undefined,
+                mockResetService
+            );
+        });
+
+        it('should successfully reset registry when user is admin', async () => {
+            mockReq.user = { name: 'adminUser', isAdmin: true };
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockResetService.resetRegistry).toHaveBeenCalled();
+            expect(mockRes.status).toHaveBeenCalledWith(200);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                status: "success",
+                message: "Registry reset to default state"
+            });
+        });
+
+        it('should return 401 when user is not authenticated', async () => {
+            mockReq.user = undefined;
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockResetService.resetRegistry).not.toHaveBeenCalled();
+            expect(mockRes.status).toHaveBeenCalledWith(401);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Unauthorized",
+                message: "Authentication required"
+            });
+        });
+
+        it('should return 403 when user is not admin', async () => {
+            mockReq.user = { name: 'regularUser', isAdmin: false };
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockResetService.resetRegistry).not.toHaveBeenCalled();
+            expect(mockRes.status).toHaveBeenCalledWith(403);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Forbidden",
+                message: "Only administrators can reset the registry"
+            });
+        });
+
+        it('should handle S3 storage errors', async () => {
+            mockReq.user = { name: 'adminUser', isAdmin: true };
+            mockResetService.resetRegistry.mockRejectedValueOnce(new Error('S3 bucket clear failed'));
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(500);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Storage Error",
+                message: "Failed to clear package storage"
+            });
+        });
+
+        it('should handle DynamoDB errors', async () => {
+            mockReq.user = { name: 'adminUser', isAdmin: true };
+            mockResetService.resetRegistry.mockRejectedValueOnce(new Error('DynamoDB tables reset failed'));
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(500);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Database Error",
+                message: "Failed to reset database state"
+            });
+        });
+
+        it('should handle timeout errors', async () => {
+            mockReq.user = { name: 'adminUser', isAdmin: true };
+            mockResetService.resetRegistry.mockRejectedValueOnce(new Error('ETIMEDOUT: Operation timed out'));
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(504);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Timeout Error",
+                message: "Operation timed out while resetting registry"
+            });
+        });
+
+        it('should handle admin configuration errors', async () => {
+            mockReq.user = { name: 'adminUser', isAdmin: true };
+            mockResetService.resetRegistry.mockRejectedValueOnce(new Error('Failed to restore admin user'));
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(500);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Configuration Error",
+                message: "Failed to restore default admin configuration"
+            });
+        });
+
+        it('should handle unexpected errors', async () => {
+            mockReq.user = { name: 'adminUser', isAdmin: true };
+            mockResetService.resetRegistry.mockRejectedValueOnce(new Error('Unexpected error occurred'));
+
+            await packageController.resetRegistry(mockReq as AuthenticatedRequest, mockRes as Response);
+
+            expect(mockRes.status).toHaveBeenCalledWith(500);
+            expect(mockRes.json).toHaveBeenCalledWith({
+                error: "Internal Server Error",
+                message: "An unexpected error occurred while resetting the registry"
+            });
+        });
+    });
 });
