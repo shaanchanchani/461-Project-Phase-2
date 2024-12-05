@@ -69,6 +69,37 @@ export interface PackageTableItem {
     user_id: string;  // Added user_id field
 }
 
+// Package dependency types
+export interface PackageDependencyEntry {
+    package_id: string;      // Reference to dependent package ID
+    version_range: string;   // Version range specification (e.g., "^1.2.3", "~2.0.0")
+    size_bytes: number;      // Size in bytes for cost calculation
+}
+
+export interface PackageDependencies {
+    [packageName: string]: string;  // package name -> version
+}
+
+// Types for storing complete dependency information
+export interface DependencyInfo {
+    package_id: string;             // ID of the dependent package
+    version: string;                // Actual version being used
+    version_range: string;          // Original version range specified
+    standalone_cost: number;        // Size in bytes of just this package
+    total_cost: number;            // Total size including this package's dependencies
+    is_circular?: boolean;          // True if this is a circular dependency
+    dependencies?: {                // Optional: dependencies of this dependency
+        [package_id: string]: DependencyInfo;  // Recursive structure
+    };
+}
+
+// Helper type for tracking dependency paths during resolution
+export interface DependencyPath {
+    package_id: string;
+    version: string;
+    path: string[];                // Array of package_ids in the dependency chain
+}
+
 export interface PackageVersionTableItem {
     version_id: string;
     package_id: string;
@@ -76,6 +107,21 @@ export interface PackageVersionTableItem {
     zip_file_path: string;
     debloated: boolean;
     created_at: string;
+    standalone_cost: number;        // Size in bytes of just this version
+    total_cost: number;            // Total size including all dependencies
+    dependencies: {                 // Complete dependency tree
+        [package_id: string]: DependencyInfo;
+    };
+}
+
+// Separate table for package dependencies
+export interface PackageDependencyTableItem {
+    dependency_id: string;           // Unique ID for this dependency relationship
+    version_id: string;             // References the version that has this dependency
+    dependent_package_id: string;    // References the package that is depended upon
+    dependent_version_range: string; // Version range specification (e.g., "^1.2.3")
+    size_bytes: number;             // Size in bytes for cost calculation
+    created_at: string;             // Timestamp when this dependency was added
 }
 
 export interface PackageMetricsTableItem {
@@ -262,6 +308,7 @@ export interface DynamoItem {
     PackageTableItem: PackageTableItem;
     PackageVersionTableItem: PackageVersionTableItem;
     PackageMetricsTableItem: PackageMetricsTableItem;
+    PackageDependencyTableItem: PackageDependencyTableItem;
     DownloadTableItem: DownloadTableItem;
     UserTableItem: UserTableItem;
     UserGroupTableItem: UserGroupTableItem;

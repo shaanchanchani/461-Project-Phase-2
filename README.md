@@ -55,7 +55,9 @@ open http://localhost:8001
 - ✅ GitHub repository cloning
 - ✅ NPM package download
 - ❌ Content validation
-- ❌ Package rating disqualification
+- ✅ Package rating disqualification
+- ❌ debloat functionality
+
 
 **Frontend:**
 - ✅ Upload form with URL/file options
@@ -64,11 +66,12 @@ open http://localhost:8001
 - ✅ Error handling
 - ❌ Package size validation
 
-#### 3. Package Retrieval (GET /package/{id}) - 95% Complete
+#### 3. Package Retrieval (GET /package/{id}) - 80% Complete
 **Backend:**
 - ✅ Package retrieval from DynamoDB
 - ✅ Error handling for missing packages
 - ✅ Proper response format
+- ❌ Testing still needed
 
 **Frontend:**
 - ✅ Package details view
@@ -88,19 +91,23 @@ open http://localhost:8001
 - ❌ Change preview
 - ❌ Update confirmation
 
-#### 5. Package Delete (DELETE /package/{id}) - 0% Complete
-**Backend:**
-- ❌ Deletion endpoint
-- ❌ Permission verification
-- ❌ Reference cleanup
+#### 5. Package Rate (GET /package/{id}/rate) - 100% Complete
+- ✅ Rate endpoint defined
+- ✅ Rating system implemented
+- ✅ Error handling
+
 
 **Frontend:**
 - ❌ Delete confirmation dialog
 - ❌ Success/error notifications
 - ❌ List refresh after deletion
 
-#### 6. Registry Reset (DELETE /reset) - 100% Complete
+### 7. Package Cost (GET /packages{id}/cost) - 0% Complete
+
 **Backend:**
+
+#### 6. Registry Reset (DELETE /reset) - 100% Complete
+**Backend:**s
 - ✅ Reset endpoint implemented
 - ✅ Admin permission check
 - ✅ Database cleanup
