@@ -96,6 +96,37 @@ The URL can be in one of these formats:
 
 This will attempt to upload the package to the registry. The response will indicate if the upload was successful or if there were any errors (e.g., if the package already exists).
 
+## Download a Package
+To download a package using its ID, use the following curl command:
+
+```bash
+curl -X GET "http://localhost:3000/package/{package_id}" \
+  -H "X-Authorization: <bearer_token>"
+```
+
+Example with actual values:
+```bash
+curl -X GET "http://localhost:3000/package/683a15ac-822b-4246-836a-b071369117f6" \
+  -H "X-Authorization: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiYWRtaW4iLCJpc0FkbWluIjp0cnVlLCJpYXQiOjE3MzMzNTk1MDMsImV4cCI6MTczMzQ0NTkwM30.k6kwq73nMW3cK5IjveHB0094h-GBjVDQqywwseJfXLI"
+```
+
+Expected response format:
+```json
+{
+  "metadata": {
+    "Name": "package-name",
+    "Version": "x.y.z",
+    "ID": "package-uuid"
+  },
+  "data": {
+    "Content": "base64-encoded-content",
+    "JSProgram": "console.log(\"test\")"
+  }
+}
+```
+
+Replace `{package_id}` with the actual package ID received from the upload response, and `<bearer_token>` with your authentication token.
+
 ## Reset Registry
 To reset the package registry to its default state, use the following curl command:
 
