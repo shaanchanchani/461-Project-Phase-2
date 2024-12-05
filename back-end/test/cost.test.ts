@@ -36,8 +36,7 @@ describe('CostController', () => {
             json: mockJson
         };
 
-        // Use the singleton instance of CostController
-        controller = CostController.getInstance();
+        controller = new CostController();
     });
 
     describe('getPackageCost', () => {

@@ -127,6 +127,93 @@ Expected response format:
 
 Replace `{package_id}` with the actual package ID received from the upload response, and `<bearer_token>` with your authentication token.
 
+## Cost Package
+
+Test the cost endpoint functionality for retrieving package costs.
+
+### 1. Get Package Cost (Standalone)
+
+```bash
+curl -X GET "http://localhost:3000/package/[PACKAGE_ID]/cost" \
+     -H "X-Authorization: Bearer [YOUR_TOKEN]"
+```
+
+Expected successful response (200):
+```json
+{
+    "[PACKAGE_ID]": {
+        "standaloneCost": 1.5,
+        "totalCost": 1.5
+    }
+}
+```
+
+### 2. Get Package Cost with Dependencies
+
+```bash
+curl -X GET "http://localhost:3000/package/[PACKAGE_ID]/cost?includeDependencies=true" \
+     -H "X-Authorization: Bearer [YOUR_TOKEN]"
+```
+
+Expected successful response (200):
+```json
+{
+    "[PACKAGE_ID]": {
+        "standaloneCost": 1.5,
+        "totalCost": 2.5
+    }
+}
+```
+
+### Error Cases
+
+1. Package Not Found (404):
+```bash
+curl -X GET "http://localhost:3000/package/nonexistent-package/cost" \
+     -H "X-Authorization: Bearer [YOUR_TOKEN]"
+```
+
+Response:
+```json
+{
+    "error": "Package not found"
+}
+```
+
+2. Invalid Authentication (401):
+```bash
+curl -X GET "http://localhost:3000/package/[PACKAGE_ID]/cost" \
+     -H "X-Authorization: Bearer invalid-token"
+```
+
+Response:
+```json
+{
+    "error": "Invalid authentication token"
+}
+```
+
+3. Missing Package ID (400):
+```bash
+curl -X GET "http://localhost:3000/package//cost" \
+     -H "X-Authorization: Bearer [YOUR_TOKEN]"
+```
+
+Response:
+```json
+{
+    "error": "Package ID is required"
+}
+```
+
+### Notes
+
+- All costs are returned in megabytes (MB)
+- The `includeDependencies` query parameter is optional and defaults to `false`
+- Standalone cost represents the size of the package itself
+- Total cost includes the size of dependencies when `includeDependencies` is `true`
+- Authentication via Bearer token is required for all requests
+
 ## Reset Registry
 To reset the package registry to its default state, use the following curl command:
 
