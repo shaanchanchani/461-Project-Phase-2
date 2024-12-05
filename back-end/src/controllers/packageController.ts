@@ -3,6 +3,7 @@ import { PackageService } from '../services/packageService';
 import { PackageUploadService } from '../services/packageUploadService';
 import { PackageDownloadService } from '../services/packageDownloadService';
 import { ResetService } from '../services/resetService';
+import { RatingService } from '../services/ratingService';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { log } from '../logger';
 
@@ -11,17 +12,20 @@ export class PackageController {
     private packageUploadService: PackageUploadService;
     private packageDownloadService: PackageDownloadService;
     private resetService: ResetService;
+    private ratingService: RatingService;
 
     constructor(
         packageService?: PackageService,
         packageUploadService?: PackageUploadService,
         packageDownloadService?: PackageDownloadService,
-        resetService?: ResetService
+        resetService?: ResetService,
+        ratingService?: RatingService
     ) {
         this.packageService = packageService || new PackageService();
         this.packageUploadService = packageUploadService || new PackageUploadService();
         this.packageDownloadService = packageDownloadService || new PackageDownloadService();
         this.resetService = resetService || new ResetService();
+        this.ratingService = ratingService || new RatingService();
     }
 
     public createPackage = async (req: AuthenticatedRequest, res: Response) => {
@@ -123,6 +127,54 @@ export class PackageController {
         } catch (error) {
             log.error('Error listing package versions:', error);
             res.status(500).json({ error: 'Failed to list package versions' });
+        }
+    }
+
+    public ratePackage = async (req: AuthenticatedRequest, res: Response) => {
+        try {
+            const { id } = req.params;
+            const userName = req.user?.name;
+            
+            if (!userName) {
+                return res.status(401).json({ 
+                    error: 'Forbidden',
+                    message: 'Invalid or missing authentication token' 
+                });
+            }
+
+            // Validate PackageID format
+            if (!id || !id.match(/^[a-zA-Z0-9\-]+$/)) {
+                return res.status(400).json({ 
+                    error: 'Bad Request',
+                    message: 'Invalid package ID format' 
+                });
+            }
+
+            const rating = await this.ratingService.calculateRating(id);
+            return res.status(200).json(rating);
+        } catch (error) {
+            log.error('Error calculating package rating:', error);
+            
+            if (error instanceof Error) {
+                if (error.message.includes('Package not found')) {
+                    return res.status(404).json({ 
+                        error: 'Not Found',
+                        message: 'Package not found' 
+                    });
+                }
+                
+                if (error.message.includes('Invalid package ID')) {
+                    return res.status(400).json({ 
+                        error: 'Bad Request',
+                        message: 'Invalid package ID format' 
+                    });
+                }
+            }
+            
+            return res.status(500).json({ 
+                error: 'Internal Server Error',
+                message: 'The package rating system failed to compute one or more metrics'
+            });
         }
     }
 

@@ -1,7 +1,6 @@
 // src/routes.ts
 import express, { Request, Response, NextFunction, RequestHandler } from 'express';
 import { packageController } from './controllers/packageController';
-import { RatingController } from './controllers/ratingController';
 import { SearchController } from './controllers/searchController';
 import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
 import { log } from './logger';
@@ -34,8 +33,7 @@ router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
 router.get('/package/:id', asyncHandler(packageController.getPackageById));
 
 // Package Rating Endpoints
-router.get('/package/:id/rate', asyncHandler(RatingController.getRating));
-router.get('/package/:id/cost', asyncHandler(RatingController.getCost));
+router.get('/package/:id/rate', asyncHandler(packageController.ratePackage));
 
 // Package Upload Endpoint
 router.post('/package', asyncHandler(packageController.createPackage));
