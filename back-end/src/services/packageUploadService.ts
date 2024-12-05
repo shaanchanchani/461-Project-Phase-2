@@ -61,8 +61,12 @@ export class PackageUploadService {
       const { zipBuffer, base64Content } = await this.fetchAndZipPackage(githubUrl);
 
       // Upload to S3
-      const s3Key = await this.s3Service.uploadPackageContent(packageId, zipBuffer);
+      const s3Key = `packages/${packageId}/content.zip`;
+      await this.s3Service.uploadPackageContent(s3Key, zipBuffer);
       log.info(`Uploaded package to S3 with key: ${s3Key}`);
+
+      // Get the package size after uploading
+      const packageSize = await this.s3Service.getPackageSize(packageId);
 
       // Create package entry in DynamoDB
       const packageData: PackageTableItem = {
@@ -81,7 +85,9 @@ export class PackageUploadService {
         version,
         zip_file_path: s3Key,
         debloated: debloat,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        standalone_cost: packageSize,
+        total_cost: packageSize  // For now, total cost equals standalone cost until we implement dependencies
       };
 
       // Store the metrics
@@ -200,8 +206,12 @@ export class PackageUploadService {
       const versionId = uuidv4();
 
       // Upload to S3
-      const s3Key = await this.s3Service.uploadPackageContent(packageId, zipBuffer);
+      const s3Key = `packages/${packageId}/content.zip`;
+      await this.s3Service.uploadPackageContent(s3Key, zipBuffer);
       log.info(`Uploaded package to S3 with key: ${s3Key}`);
+
+      // Get the package size after uploading
+      const packageSize = await this.s3Service.getPackageSize(packageId);
 
       // Create package entry in DynamoDB
       const packageData: PackageTableItem = {
@@ -220,7 +230,9 @@ export class PackageUploadService {
         version,
         zip_file_path: s3Key,
         debloated: debloat,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        standalone_cost: packageSize,
+        total_cost: packageSize  // For now, total cost equals standalone cost until we implement dependencies
       };
 
       // Store the metrics

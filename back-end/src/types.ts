@@ -76,6 +76,8 @@ export interface PackageVersionTableItem {
     zip_file_path: string;
     debloated: boolean;
     created_at: string;
+    standalone_cost: number;        // Size in bytes of just this version
+    total_cost: number;            // Total size including all dependencies // not supported yet
 }
 
 export interface PackageMetricsTableItem {

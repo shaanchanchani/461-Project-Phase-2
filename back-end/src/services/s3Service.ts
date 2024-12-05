@@ -251,6 +251,31 @@ export class S3Service {
             throw new Error(`Failed to check if bucket is empty: ${(error as Error).message}`);
         }
     }
+
+    /**
+     * Gets the size of a package's zip file in bytes
+     * @param packageId The ID of the package
+     * @returns The size of the package in bytes
+     */
+    async getPackageSize(packageId: string): Promise<number> {
+        try {
+            const key = `packages/${packageId}/content.zip`;
+            const command = new GetObjectCommand({
+                Bucket: this.bucketName,
+                Key: key
+            });
+            const response = await this.s3Client.send(command);
+            return response.ContentLength || 0;
+        } catch (error: any) {
+            if (error.name === 'NoSuchKey') {
+                log.warn(`Package ${packageId} not found in S3, returning size 0`);
+                return 0;
+            }
+            log.error(`Error getting package size for ${packageId}:`, error);
+            throw error;
+        }
+    }
+
     /**
      * Test function to check bucket status
      */
@@ -281,6 +306,5 @@ export class S3Service {
             log.error('Test failed:', error);
             throw error;
         }
-}
-
+    }
 }

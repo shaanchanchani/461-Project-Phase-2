@@ -617,6 +617,26 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
         }
     }
 
+    async updatePackageVersion(versionData: PackageVersionTableItem): Promise<void> {
+        try {
+            await this.docClient.send(new UpdateCommand({
+                TableName: PACKAGE_VERSIONS_TABLE,
+                Key: {
+                    package_id: versionData.package_id,
+                    version: versionData.version
+                },
+                UpdateExpression: 'SET standalone_cost = :sc, total_cost = :tc',
+                ExpressionAttributeValues: {
+                    ':sc': versionData.standalone_cost,
+                    ':tc': versionData.total_cost
+                }
+            }));
+        } catch (error) {
+            log.error('Error updating package version:', error);
+            throw error;
+        }
+    }
+
     /**
      * Clear all items from a DynamoDB table using batch operations
      * @param tableName The name of the table to clear
