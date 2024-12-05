@@ -4,7 +4,13 @@ import { S3Service } from './s3Service';
 import { log } from '../logger';
 import { URL } from 'url';
 import { checkUrlType, UrlType } from '../utils/urlUtils';
-import { PackageTableItem, PackageVersionTableItem, PackageUploadResponse } from '../types';
+import { 
+  PackageTableItem, 
+  PackageVersionTableItem, 
+  PackageUploadResponse,
+  PackageDependencyTableItem,
+  DependencyInfo
+} from '../types';
 import axios from 'axios';
 import AdmZip from 'adm-zip';
 import { GetNetScore } from '../metrics/netScore';
@@ -39,20 +45,21 @@ export class PackageUploadService {
         githubUrl = await this.handleNpmUrl(url);
       }
 
-
       // Extract package info from URL
-      const { name, version, description } = await this.extractPackageInfo(githubUrl);
+      const packageInfo = await this.extractPackageInfo(githubUrl);
 
       // Check if this exact version already exists
-      const existingPackage = await this.db.getPackageByName(name);
+      const existingPackage = await this.db.getPackageByName(packageInfo.name);
       if (existingPackage) {
-        const existingVersion = await this.db.getPackageVersion(existingPackage.package_id, version);
+        const existingVersion = await this.db.getPackageVersion(existingPackage.package_id, packageInfo.version);
         if (existingVersion) {
-          throw new Error(`Package ${name} version ${version} already exists`);
+          throw new Error(`Package ${packageInfo.name} version ${packageInfo.version} already exists`);
         }
       }
+
       // Check package metrics before proceeding
       const metrics = await this.checkPackageMetrics(githubUrl);
+
       // Generate unique IDs
       const packageId = existingPackage?.package_id || uuidv4();
       const versionId = uuidv4();
@@ -67,9 +74,9 @@ export class PackageUploadService {
       // Create package entry in DynamoDB
       const packageData: PackageTableItem = {
         package_id: packageId,
-        name,
-        latest_version: version,
-        description,
+        name: packageInfo.name,
+        latest_version: packageInfo.version,
+        description: packageInfo.description,
         created_at: new Date().toISOString(),
         user_id: userId || 'anonymous'
       };
@@ -78,10 +85,13 @@ export class PackageUploadService {
       const versionData: PackageVersionTableItem = {
         version_id: versionId,
         package_id: packageId,
-        version,
+        version: packageInfo.version,
         zip_file_path: s3Key,
         debloated: debloat,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        standalone_cost: 0,
+        total_cost: 0,
+        dependencies: {}
       };
 
       // Store the metrics
@@ -93,18 +103,38 @@ export class PackageUploadService {
       } else {
         // For existing packages, only update the latest version if this version is newer
         const currentVersion = existingPackage.latest_version;
-        if (this.isNewerVersion(version, currentVersion)) {
-          await this.db.updatePackageLatestVersion(existingPackage.name, version);
+        if (this.isNewerVersion(packageInfo.version, currentVersion)) {
+          await this.db.updatePackageLatestVersion(existingPackage.name, packageInfo.version);
         }
       }
 
-      // Always create a new version entry
+      // First create the version entry
       await this.db.createPackageVersion(versionData);
+
+      // Get the package's own size first
+      const packageSize = await this.getPackageSize(packageId, packageInfo.version);
+      
+      // Then process dependencies if they exist
+      if (packageInfo.dependencies) {
+        const dependencyTree = await this.processDependencies(packageInfo.dependencies, new Set(), versionId);
+        versionData.dependencies = dependencyTree;
+        // Standalone cost is the package's own size
+        versionData.standalone_cost = packageSize;
+        // Total cost is package size plus sum of non-missing dependency costs
+        versionData.total_cost = packageSize + Object.values(dependencyTree)
+          .reduce((sum, dep) => sum + (dep.is_missing ? 0 : dep.total_cost), 0);
+        await this.db.updatePackageVersion(versionData);
+      } else {
+        // If no dependencies, both costs are just the package size
+        versionData.standalone_cost = packageSize;
+        versionData.total_cost = packageSize;
+        await this.db.updatePackageVersion(versionData);
+      }
 
       return {
         metadata: {
-          Name: name,
-          Version: version,
+          Name: packageInfo.name,
+          Version: packageInfo.version,
           ID: packageId
         },
         data: {
@@ -158,6 +188,14 @@ export class PackageUploadService {
         .replace('git@github.com:', 'https://github.com/')
         .replace('git+https://github.com/', 'https://github.com/')
         .replace('git+ssh://git@github.com/', 'https://github.com/');
+
+      
+      if (version) {
+        const sanitizedVersionUrl = `${repoUrl}/tree/v${version}`;
+        log.info(`Using version-specific URL: ${sanitizedVersionUrl}`);
+        repoUrl = sanitizedVersionUrl;
+      } 
+      log.info(`Using default URL: ${repoUrl}`);
 
       // Validate that it's a GitHub URL
       const urlObj = new URL(repoUrl);
@@ -220,7 +258,10 @@ export class PackageUploadService {
         version,
         zip_file_path: s3Key,
         debloated: debloat,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        standalone_cost: 0,
+        total_cost: 0,
+        dependencies: {}
       };
 
       // Store the metrics
@@ -237,8 +278,28 @@ export class PackageUploadService {
         }
       }
 
-      // Always create a new version entry
+      // First create the version entry
       await this.db.createPackageVersion(versionData);
+
+      // Get the package's own size first
+      const packageSize = await this.getPackageSize(packageId, version);
+      
+      // Then process dependencies if they exist
+      if (packageJson.dependencies) {
+        const dependencyTree = await this.processDependencies(packageJson.dependencies, new Set(), versionId);
+        versionData.dependencies = dependencyTree;
+        // Standalone cost is the package's own size
+        versionData.standalone_cost = packageSize;
+        // Total cost is package size plus sum of non-missing dependency costs
+        versionData.total_cost = packageSize + Object.values(dependencyTree)
+          .reduce((sum, dep) => sum + (dep.is_missing ? 0 : dep.total_cost), 0);
+        await this.db.updatePackageVersion(versionData);
+      } else {
+        // If no dependencies, both costs are just the package size
+        versionData.standalone_cost = packageSize;
+        versionData.total_cost = packageSize;
+        await this.db.updatePackageVersion(versionData);
+      }
 
       return {
         metadata: {
@@ -270,13 +331,19 @@ export class PackageUploadService {
     }
   }
 
-  private async extractPackageInfo(url: string): Promise<{ name: string; version: string; description: string }> {
+  private async extractPackageInfo(url: string): Promise<{ 
+    name: string; 
+    version: string; 
+    description: string;
+    dependencies?: { [key: string]: string };
+  }> {
     const urlObj = new URL(url);
     let name: string;
     let version: string = '1.0.0';
     let description: string = '';
+    let dependencies: { [key: string]: string } | undefined;
     let ref: string | undefined;
-
+    
     if (urlObj.hostname === 'github.com') {
       const pathParts = urlObj.pathname.split('/').filter(Boolean);
       
@@ -304,7 +371,9 @@ export class PackageUploadService {
             const content = Buffer.from(packageJsonResponse.data.content, 'base64').toString();
             const packageJson = JSON.parse(content);
             name = packageJson.name || repo;
+            version = packageJson.version || '1.0.0';
             description = packageJson.description || description;
+            dependencies = packageJson.dependencies;
           } catch (error) {
             // Just continue if package.json not found
           }
@@ -353,6 +422,7 @@ export class PackageUploadService {
             version = packageJson.version || '1.0.0';
             name = packageJson.name || repo;
             description = packageJson.description || description;
+            dependencies = packageJson.dependencies;
           } catch (error) {
             // Just continue if package.json not found
           }
@@ -384,7 +454,7 @@ export class PackageUploadService {
       throw new Error('Only GitHub URLs are supported at this time');
     }
 
-    return { name, version, description };
+    return { name, version, description, dependencies };
   }
 
   private async fetchAndZipPackage(url: string): Promise<{ zipBuffer: Buffer; base64Content: string }> {
@@ -581,6 +651,152 @@ export class PackageUploadService {
     throw new Error('Failed to calculate package metrics after all retries');
   }
 
+  private async processDependencies(
+    dependencies: { [key: string]: string },
+    processedDeps: Set<string> = new Set(),
+    parentVersionId?: string
+  ): Promise<{ [key: string]: DependencyInfo }> {
+    const dependencyTree: { [key: string]: DependencyInfo } = {};
+
+    for (const [depName, versionRange] of Object.entries(dependencies)) {
+      try {
+        // Get the dependency package
+        const depPackage = await this.db.getPackageByName(depName);
+        
+        // If package doesn't exist, try to upload it from GitHub
+        if (!depPackage) {
+          log.info(`Package ${depName} not found in registry. Uploading from npm...`);
+          try {
+            // Get GitHub URL from npm and upload
+            const npmUrl = `https://npmjs.com/package/${depName}@${versionRange}`;
+            const githubUrl = await this.handleNpmUrl(npmUrl);
+            await this.uploadPackageFromUrl(githubUrl);
+          } catch (error) {
+            log.error(`Failed to upload package ${depName}:`, error);
+            dependencyTree[depName] = this.createMissingDependencyInfo(depName, versionRange);
+            continue;
+          }
+        }
+
+        // Get the version of the package
+        const depVersion = await this.db.getPackageVersion(depPackage?.package_id || depName, versionRange);
+        if (!depVersion) {
+          log.warn(`Version ${versionRange} not found for package ${depName}. Adding as missing dependency.`);
+          dependencyTree[depName] = this.createMissingDependencyInfo(depName, versionRange);
+          continue;
+        }
+
+        // Check for circular dependencies
+        const depKey = `${depName}@${depVersion.version}`;
+        if (processedDeps.has(depKey)) {
+          const standalone = await this.getPackageSize(depName, depVersion.version);
+          dependencyTree[depName] = {
+            package_id: depName,
+            version: depVersion.version,
+            version_range: versionRange,
+            standalone_cost: standalone,
+            total_cost: standalone, // For circular deps, only count standalone
+            is_circular: true,
+            dependencies: {}  // Empty to break the cycle
+          };
+          continue;
+        }
+
+        // Add to processed deps
+        processedDeps.add(depKey);
+
+        // Process nested dependencies if they exist
+        let nestedDependencies = {};
+        if (depVersion.dependencies) {
+          nestedDependencies = await this.processDependencies(
+            Object.entries(depVersion.dependencies).reduce((acc, [key, info]) => {
+              acc[key] = info.version_range;
+              return acc;
+            }, {} as { [key: string]: string }),
+            processedDeps,
+            depVersion.version_id
+          );
+        }
+
+        // Get standalone cost from S3
+        const standalone = await this.getPackageSize(depName, depVersion.version);
+        
+        // Calculate total cost including nested dependencies
+        const depTotalCost = standalone + Object.values(nestedDependencies as { [key: string]: DependencyInfo })
+          .reduce((sum, dep) => sum + (dep.is_missing ? 0 : dep.total_cost), 0);
+
+        // Add to dependency tree
+        dependencyTree[depName] = {
+          package_id: depName,
+          version: depVersion.version,
+          version_range: versionRange,
+          standalone_cost: standalone,
+          total_cost: depTotalCost,
+          dependencies: nestedDependencies as { [key: string]: DependencyInfo }
+        };
+
+        // Create dependency entry in PackageDependencies table if we have a parent version
+        if (parentVersionId) {
+          try {
+            const dependencyEntry: PackageDependencyTableItem = {
+              dependency_id: uuidv4(),
+              version_id: parentVersionId,
+              dependent_package_id: depName,
+              dependent_version_range: versionRange,
+              size_bytes: standalone,
+              created_at: new Date().toISOString()
+            };
+            log.info(`Creating dependency entry for ${depName} under version ${parentVersionId}`);
+            await this.db.createPackageDependency(dependencyEntry);
+            log.info(`Successfully created dependency entry for ${depName}`);
+          } catch (error) {
+            log.error(`Failed to create dependency entry for ${depName}:`, error);
+            // Don't throw here - we want to continue processing other dependencies
+          }
+        } else {
+          log.debug(`Skipping dependency entry creation for ${depName} - no parent version ID`);
+        }
+
+        // Remove from processed set when done with this branch
+        processedDeps.delete(depKey);
+      } catch (error: any) {
+        log.error(`Error processing dependency ${depName}:`, error);
+        // Add as a missing dependency with minimal info
+        dependencyTree[depName] = this.createMissingDependencyInfo(depName, versionRange);
+        continue;
+      }
+    }
+
+    return dependencyTree;
+  }
+
+  private async getPackageSize(packageId: string, version: string): Promise<number> {
+    try {
+      const packageVersion = await this.db.getPackageVersion(packageId, version);
+      if (!packageVersion) {
+        throw new Error(`Version ${version} not found for package ${packageId}`);
+      }
+      // Get the size of the zip file from S3
+      const size = await this.s3Service.getObjectSize(packageVersion.zip_file_path);
+      return size;
+    } catch (error) {
+      log.error('Error getting package size:', error);
+      return 0; // Return 0 if we can't get the size
+    }
+  }
+
+  private async findMatchingVersion(packageId: string, versionRange: string): Promise<PackageVersionTableItem | null> {
+    try {
+      const versions = await this.db.getPackageVersions(packageId);
+      // For now, just return the latest version
+      // TODO: Implement proper semver matching
+      return versions[0] || null;
+    } catch (error) {
+      log.error('Error finding matching version:', error);
+      return null;
+    }
+  }
+
   private isNewerVersion(version: string, currentVersion: string): boolean {
     const versionParts = version.split('.').map(Number);
     const currentVersionParts = currentVersion.split('.').map(Number);
@@ -597,5 +813,17 @@ export class PackageUploadService {
     }
 
     return false;
+  }
+
+  private createMissingDependencyInfo(packageName: string, versionRange: string): DependencyInfo {
+    return {
+      package_id: packageName,
+      version: 'unknown',
+      version_range: versionRange,
+      standalone_cost: 0,
+      total_cost: 0,
+      dependencies: {},
+      is_missing: true
+    };
   }
 }

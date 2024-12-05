@@ -251,36 +251,25 @@ export class S3Service {
             throw new Error(`Failed to check if bucket is empty: ${(error as Error).message}`);
         }
     }
+
     /**
-     * Test function to check bucket status
+     * Gets the size of an object in S3 in bytes.
+     * @param filePath - Full path to the file in S3
+     * @returns Promise<number> - Size of the object in bytes
+     * @throws Error if the file doesn't exist or size check fails
      */
-    async testBucketEmpty(): Promise<void> {
+    async getObjectSize(filePath: string): Promise<number> {
+        const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: filePath
+        });
+
         try {
-            log.info('Starting bucket empty test...');
-            const isEmpty = await this.isBucketEmpty();
-            log.info(`Test result: Bucket is ${isEmpty ? 'empty' : 'not empty'}`);
-            
-            if (!isEmpty) {
-                // List the first few objects to see what's there
-                const listCommand = new ListObjectsV2Command({
-                    Bucket: this.bucketName,
-                    Prefix: 'packages/',
-                    MaxKeys: 5  // List up to 5 objects for inspection
-                });
-
-                const response = await this.s3Client.send(listCommand);
-                
-                if (response.Contents) {
-                    log.info('Found objects:');
-                    response.Contents.forEach(object => {
-                        log.info(`- ${object.Key}`);
-                    });
-                }
-            }
+            const response = await this.s3Client.send(command);
+            return response.ContentLength || 0;
         } catch (error) {
-            log.error('Test failed:', error);
-            throw error;
+            console.error('Error getting object size from S3:', error);
+            throw new Error('Failed to get object size from S3');
         }
-}
-
+    }
 }

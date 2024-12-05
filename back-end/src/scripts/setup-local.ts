@@ -11,6 +11,7 @@ const USERS_TABLE = 'Users';
 const USER_GROUPS_TABLE ='UserGroups';
 const PACKAGES_TABLE = 'Packages';
 const PACKAGE_VERSIONS_TABLE ='PackageVersions';
+const PACKAGE_DEPENDENCIES_TABLE = 'PackageDependencies';
 const PACKAGE_METRICS_TABLE ='PackageMetrics';
 const DOWNLOADS_TABLE ='Downloads';
 
@@ -178,11 +179,27 @@ async function createVersionsTable() {
             TableName: PACKAGE_VERSIONS_TABLE,
             AttributeDefinitions: [
                 { AttributeName: 'package_id', AttributeType: 'S' },
-                { AttributeName: 'version', AttributeType: 'S' }
+                { AttributeName: 'version', AttributeType: 'S' },
+                { AttributeName: 'version_id', AttributeType: 'S' }
             ],
             KeySchema: [
                 { AttributeName: 'package_id', KeyType: 'HASH' },
                 { AttributeName: 'version', KeyType: 'RANGE' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'version-id-index',
+                    KeySchema: [
+                        { AttributeName: 'version_id', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
             ],
             ProvisionedThroughput: {
                 ReadCapacityUnits: 5,
@@ -193,6 +210,49 @@ async function createVersionsTable() {
     } catch (error: any) {
         if (error.name === 'ResourceInUseException') {
             console.log('ℹ️  Versions table already exists');
+        } else {
+            throw error;
+        }
+    }
+}
+
+async function createDependenciesTable() {
+    try {
+        await dynamodb.createTable({
+            TableName: PACKAGE_DEPENDENCIES_TABLE,
+            AttributeDefinitions: [
+                { AttributeName: 'dependency_id', AttributeType: 'S' },
+                { AttributeName: 'version_id', AttributeType: 'S' },
+                { AttributeName: 'dependent_package_id', AttributeType: 'S' }
+            ],
+            KeySchema: [
+                { AttributeName: 'version_id', KeyType: 'HASH' },
+                { AttributeName: 'dependency_id', KeyType: 'RANGE' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'dependent-package-index',
+                    KeySchema: [
+                        { AttributeName: 'dependent_package_id', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
+            ],
+            ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5
+            }
+        });
+        console.log('✅ Dependencies table created');
+    } catch (error: any) {
+        if (error.name === 'ResourceInUseException') {
+            console.log('ℹ️  Dependencies table already exists');
         } else {
             throw error;
         }
@@ -356,6 +416,7 @@ async function setupLocalDev() {
         await createUserGroupsTable();
         await createPackagesTable();
         await createVersionsTable();
+        await createDependenciesTable();
         await createMetricsTable();
         await createDownloadsTable();
         

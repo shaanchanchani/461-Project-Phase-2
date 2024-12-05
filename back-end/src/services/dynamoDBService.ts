@@ -32,13 +32,16 @@ import {
     DownloadTableItem,
     UserTableItem,
     UserGroupTableItem,
-    DynamoItem
+    DynamoItem,
+    PackageDependencyTableItem,
+    DependencyInfo
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 
 const PACKAGES_TABLE = 'Packages';
 const PACKAGE_VERSIONS_TABLE = 'PackageVersions';
+const PACKAGE_DEPENDENCIES_TABLE = 'PackageDependencies';
 const PACKAGE_METRICS_TABLE =  'PackageMetrics';
 const DOWNLOADS_TABLE = 'Downloads';
 const USERS_TABLE = 'Users';
@@ -427,6 +430,75 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
         }
     }
 
+    async createPackageDependency(dependencyData: PackageDependencyTableItem): Promise<void> {
+        try {
+            await this.put<'PackageDependencyTableItem'>(PACKAGE_DEPENDENCIES_TABLE, dependencyData);
+            log.info(`Created dependency for package ${dependencyData.dependent_package_id} version ${dependencyData.version_id}`);
+        } catch (error) {
+            log.error('Error creating package dependency:', error);
+            throw error;
+        }
+    }
+
+    async getDependenciesForPackage(packageId: string, versionId: string): Promise<PackageDependencyTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommandDoc({
+                TableName: PACKAGE_DEPENDENCIES_TABLE,
+                KeyConditionExpression: 'dependent_package_id = :pid AND version_id = :vid',
+                ExpressionAttributeValues: {
+                    ':pid': packageId,
+                    ':vid': versionId
+                }
+            }));
+
+            return result.Items as PackageDependencyTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting dependencies:', error);
+            throw error;
+        }
+    }
+
+    async getDependentPackages(dependencyId: string): Promise<PackageDependencyTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommandDoc({
+                TableName: PACKAGE_DEPENDENCIES_TABLE,
+                IndexName: 'dependency-id-index',
+                KeyConditionExpression: 'dependency_id = :did',
+                ExpressionAttributeValues: {
+                    ':did': dependencyId
+                }
+            }));
+
+            return result.Items as PackageDependencyTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting dependent packages:', error);
+            throw error;
+        }
+    }
+
+    async updatePackageCosts(packageId: string, version: string, standaloneSize: number, totalSize: number): Promise<void> {
+        try {
+            const params = {
+                TableName: PACKAGE_VERSIONS_TABLE,
+                Key: {
+                    package_id: packageId,
+                    version: version
+                },
+                UpdateExpression: 'SET standalone_cost = :sc, total_cost = :tc',
+                ExpressionAttributeValues: {
+                    ':sc': standaloneSize,
+                    ':tc': totalSize
+                }
+            };
+
+            await this.docClient.send(new UpdateCommand(params));
+            log.info(`Updated costs for package ${packageId} version ${version}`);
+        } catch (error) {
+            log.error('Error updating package costs:', error);
+            throw error;
+        }
+    }
+
     public async createMetricEntry(metricEntry: PackageMetricsTableItem): Promise<void> {
         try {
             const params = {
@@ -484,17 +556,14 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
         }
     }
 
-    /**
-     * Get a specific version of a package
-     * @param packageId The ID of the package
-     * @param version The version string
-     * @returns Package version item if found, null otherwise
-     */
     async getPackageVersion(packageId: string, version: string): Promise<PackageVersionTableItem | null> {
         try {
             const result = await this.docClient.send(new QueryCommandDoc({
                 TableName: PACKAGE_VERSIONS_TABLE,
-                KeyConditionExpression: 'package_id = :packageId AND version = :version',
+                KeyConditionExpression: 'package_id = :packageId AND #v = :version',
+                ExpressionAttributeNames: {
+                    '#v': 'version'
+                },
                 ExpressionAttributeValues: {
                     ':packageId': packageId,
                     ':version': version
@@ -508,11 +577,6 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
         }
     }
 
-    /**
-     * Get latest version of a package
-     * @param packageId The ID of the package
-     * @returns Latest package version item if found, null otherwise
-     */
     async getLatestPackageVersion(packageId: string): Promise<PackageVersionTableItem | null> {
         try {
             const result = await this.docClient.send(new QueryCommandDoc({
@@ -525,11 +589,7 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
                 Limit: 1 // Get only the latest version
             }));
 
-            if (!result.Items || result.Items.length === 0) {
-                return null;
-            }
-
-            return result.Items[0] as PackageVersionTableItem;
+            return result.Items?.[0] as PackageVersionTableItem || null;
         } catch (error) {
             log.error('Error getting latest package version:', error);
             throw error;
@@ -615,6 +675,40 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
             log.error('Error updating package latest version:', error);
             throw error;
         }
+    }
+
+    async updatePackageVersion(versionData: PackageVersionTableItem): Promise<void> {
+        const params = {
+            TableName: PACKAGE_VERSIONS_TABLE,
+            Key: {
+                package_id: versionData.package_id,
+                version: versionData.version
+            },
+            UpdateExpression: 'SET version_id = :vid, zip_file_path = :z, debloated = :d, created_at = :c, standalone_cost = :sc, total_cost = :tc, dependencies = :deps',
+            ExpressionAttributeValues: {
+                ':vid': versionData.version_id,
+                ':z': versionData.zip_file_path,
+                ':d': versionData.debloated,
+                ':c': versionData.created_at,
+                ':sc': versionData.standalone_cost,
+                ':tc': versionData.total_cost,
+                ':deps': versionData.dependencies
+            }
+        };
+
+        try {
+            await this.docClient.send(new UpdateCommand(params));
+        } catch (error) {
+            log.error('Error updating package version:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Marshalls the dependencies object into DynamoDB format
+     */
+    private marshallDependencies(dependencies: { [key: string]: DependencyInfo }): { [key: string]: any } {
+        return dependencies; // No need to manually marshal since we're using DynamoDBDocumentClient
     }
 
     /**
@@ -725,6 +819,11 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
                     projectionExpression: 'package_id, #v',
                     expressionAttributeNames: { '#v': 'version' }
                 };
+            case PACKAGE_DEPENDENCIES_TABLE:
+                return {
+                    projectionExpression: 'dependency_id, version_id, dependent_package_id',
+                    expressionAttributeNames: {}
+                };
             case PACKAGE_METRICS_TABLE:
                 return {
                     projectionExpression: 'metric_id',
@@ -765,6 +864,11 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
                     package_id: item.package_id,
                     version: item.version 
                 };
+            case PACKAGE_DEPENDENCIES_TABLE:
+                return { 
+                    dependency_id: item.dependency_id,
+                    version_id: item.version_id
+                };
             case PACKAGE_METRICS_TABLE:
                 return { metric_id: item.metric_id };
             case DOWNLOADS_TABLE:
@@ -787,6 +891,7 @@ async addUserToGroup(userId: string, groupId: string): Promise<void> {
             await Promise.all([
                 this.clearTable(PACKAGES_TABLE),
                 this.clearTable(PACKAGE_VERSIONS_TABLE),
+                this.clearTable(PACKAGE_DEPENDENCIES_TABLE),
                 this.clearTable(PACKAGE_METRICS_TABLE),
                 this.clearTable(DOWNLOADS_TABLE),
                 this.clearTable(USERS_TABLE),

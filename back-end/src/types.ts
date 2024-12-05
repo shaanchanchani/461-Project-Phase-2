@@ -88,6 +88,7 @@ export interface DependencyInfo {
     standalone_cost: number;        // Size in bytes of just this package
     total_cost: number;            // Total size including this package's dependencies
     is_circular?: boolean;          // True if this is a circular dependency
+    is_missing?: boolean;          // True if the package is not found in our registry
     dependencies?: {                // Optional: dependencies of this dependency
         [package_id: string]: DependencyInfo;  // Recursive structure
     };
