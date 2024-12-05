@@ -44,6 +44,7 @@ open http://localhost:8001
 **Frontend:**
 - ✅ Basic search UI implemented
 - ✅ Search input field with RegEx support
+- ✅ upload button and upload dialog works well needs some fixing
 - ❌ Results pagination
 - ❌ Advanced filtering options
 

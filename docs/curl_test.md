@@ -91,7 +91,71 @@ curl -X POST http://localhost:3000/package \
 The URL can be in one of these formats:
 - Standard GitHub repository: `github.com/owner/repo`
 - GitHub repository with version: `github.com/owner/repo/tree/version`
-- NPM package: `npmjs.com/package/name`  <-- no support for NPM package with version yet!
+- NPM package: `npmjs.com/package/name` 
 
 
 This will attempt to upload the package to the registry. The response will indicate if the upload was successful or if there were any errors (e.g., if the package already exists).
+
+## Reset Registry
+To reset the package registry to its default state, use the following curl command:
+
+```bash
+curl -X DELETE http://localhost:3000/reset \
+  -H "X-Authorization: <bearer_token>"
+```
+
+### Important Notes
+- This endpoint requires admin privileges. Make sure to use a bearer token for an admin user.
+- This operation will clear all packages from the registry.
+- This is a destructive operation and cannot be undone.
+
+### Example Responses
+
+#### Successful Reset
+```json
+{
+    "status": "success",
+    "message": "Registry reset to default state"
+}
+```
+
+#### Error Responses
+
+Unauthorized (No token):
+```json
+{
+    "error": "Unauthorized",
+    "message": "Authentication required"
+}
+```
+
+Forbidden (Non-admin user):
+```json
+{
+    "error": "Forbidden",
+    "message": "Only administrators can reset the registry"
+}
+```
+
+Storage Error:
+```json
+{
+    "error": "Storage Error",
+    "message": "Failed to clear package storage"
+}
+```
+
+Database Error:
+```json
+{
+    "error": "Database Error",
+    "message": "Failed to reset database state"
+}
+```
+
+Timeout Error:
+```json
+{
+    "error": "Timeout Error",
+    "message": "Operation timed out while resetting registry"
+}
