@@ -12,4 +12,5 @@ Here's your complete checklist of remaining implementations:
 - [ ] Return matching packages' metadata
 - [ ] Handle 404 if no matches found
 
-Would you like me to explain any of these tasks in more detail?
+/package upload
+- fix upload for zips.
