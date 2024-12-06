@@ -13,10 +13,10 @@ Here's your complete checklist of remaining implementations:
 - [ ] Handle 404 if no matches found
 
 □ /package/{id} (PUT) - Update
-- [ ] Verify name, version, and ID match
-- [ ] Replace previous package contents
-- [ ] Handle URL or Content in request
-- [ ] Return 404 if package doesn't exist
+- [x] Verify name, version, and ID match
+- [x] Replace previous package contents
+- [x] Handle URL or Content in request
+- [x] Return 404 if package doesn't exist
 
 □ /package (POST) - Upload/Ingest
 - [ ] Implement URL-based package ingestion
