@@ -1,5 +1,4 @@
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { Response, Request } from 'express';
 import { PackageUploadService } from '../services/packageUploadService';
 import { log } from '../logger';
 
@@ -10,14 +9,11 @@ export class UploadController {
         this.packageUploadService = packageUploadService || new PackageUploadService();
     }
 
-    public createPackage = async (req: AuthenticatedRequest, res: Response) => {
+    public createPackage = async (req: Request, res: Response) => {
         try {
             const { URL: url, Content, JSProgram, debloat } = req.body;
-            const userId = req.user?.name;
-
-            if (!userId) {
-                return res.status(401).json({ error: 'User not authenticated' });
-            }
+            // Set a default user ID since auth is optional
+            const userId = 'admin';
 
             if (!url && !Content) {
                 return res.status(400).json({ error: 'Either URL or Content must be provided' });
@@ -44,20 +40,18 @@ export class UploadController {
                     return res.status(424).json({ error: error.message });
                 }
 
-                if (error.message.includes('Authentication failed')) {
-                    return res.status(401).json({ error: error.message });
-                }
-
                 if (error.message.includes('Invalid request')) {
                     return res.status(400).json({ error: error.message });
                 }
 
-                return res.status(400).json({ error: error.message });
+                if (error.message.includes('Invalid URL')) {
+                    return res.status(400).json({ error: error.message });
+                }
             }
-            
+
             return res.status(500).json({ error: 'Internal server error' });
         }
-    }
+    };
 }
 
 export const uploadController = new UploadController();

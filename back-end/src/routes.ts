@@ -10,6 +10,7 @@ import {downloadController} from './controllers/downloadController'
 import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
 import { log } from './logger';
 import { updateController } from './controllers/updateController';
+import { trackController } from './controllers/trackController';
 
 const router = express.Router();
 
@@ -22,11 +23,25 @@ const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promi
 // Logging middleware
 router.use((req: Request, res: Response, next: NextFunction) => {
     log.info(`${req.method} ${req.path}`);
+    log.info('Request headers:', req.headers);
+    log.info('Request body:', req.body);
     next();
 });
 
 // Authentication endpoint (doesn't require auth middleware)
-router.put('/authenticate', asyncHandler(AuthController.authenticate));
+router.put('/authenticate', asyncHandler(async (req: Request, res: Response) => {
+    log.info('=== Authentication Request ===');
+    log.info('Headers:', req.headers);
+    log.info('Body:', req.body);
+    await AuthController.authenticate(req, res);
+}));
+
+// Tracks endpoint (doesn't require auth middleware)
+router.get('/tracks', asyncHandler(async (req: Request, res: Response) => {
+    log.info('=== Tracks Request ===');
+    log.info('Headers:', req.headers);
+    await trackController.getTrack(req, res);
+}));
 
 // All other endpoints require authentication
 router.use(authMiddleware);

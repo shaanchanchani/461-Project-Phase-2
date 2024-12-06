@@ -1,5 +1,4 @@
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { Response, Request } from 'express';
 import { CostService, costService } from '../services/costService';
 import { log } from '../logger';
 
@@ -10,7 +9,7 @@ export class CostController {
         this.costService = costService || new CostService();
     }
 
-    public getPackageCost = async (req: AuthenticatedRequest, res: Response) => {
+    public getPackageCost = async (req: Request, res: Response) => {
         try {
             const packageId = req.params.id;
             const includeDependencies = req.query.includeDependencies === 'true';

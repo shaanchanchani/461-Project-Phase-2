@@ -7,11 +7,15 @@ import { log } from './logger';
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Trust proxy headers
+app.set('trust proxy', true);
+
 // Middleware
 app.use(cors({
-    origin: 'http://localhost:5173', // Vite's default port
+    origin: '*', // Allow all origins for now
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-Authorization'],
+    allowedHeaders: ['Content-Type', 'X-Authorization', 'x-authorization', 'Authorization', 'authorization'],
+    exposedHeaders: ['X-Authorization', 'x-authorization', 'Authorization', 'authorization'],
     credentials: true
 }));
 app.use(express.json());

@@ -1,5 +1,4 @@
-import { Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/auth';
+import { Response, Request } from 'express';
 import { log } from '../logger';
 import { RatingService } from '../services/ratingService';
 
@@ -12,17 +11,11 @@ export class RatingController {
     ) {
         this.ratingService = ratingService || new RatingService();
     }
-    public ratePackage = async (req: AuthenticatedRequest, res: Response) => {
+    public ratePackage = async (req: Request, res: Response) => {
         try {
             const { id } = req.params;
-            const userName = req.user?.name;
-            
-            if (!userName) {
-                return res.status(401).json({ 
-                    error: 'Forbidden',
-                    message: 'Invalid or missing authentication token' 
-                });
-            }
+            // Set a default user ID since auth is optional
+            const userId = 'admin';
 
             // Validate PackageID format
             if (!id || !id.match(/^[a-zA-Z0-9\-]+$/)) {
