@@ -76,6 +76,8 @@ export interface PackageVersionTableItem {
     zip_file_path: string;
     debloated: boolean;
     created_at: string;
+    standalone_cost: number;        // Size in bytes of just this version
+    total_cost: number;            // Total size including all dependencies // not supported yet
 }
 
 export interface PackageMetricsTableItem {
@@ -84,10 +86,19 @@ export interface PackageMetricsTableItem {
     net_score: number;      // Overall package quality score
     bus_factor: number;     // Project maintenance risk metric
     ramp_up: number;        // Project readiness metric
+    responsive_maintainer: number;  // Maintainer responsiveness metric
     license_score: number;  // License compliance metric
+    good_pinning_practice: number;  // Dependency version control metric
+    pull_request: number;   // Code review coverage metric
     correctness: number;    // Code quality assessment
-    dependency_pinning: number;  // Dependency version control metric (0-1)
-    pull_request_review: number; // Code review coverage metric (0-1)
+    bus_factor_latency: number;     // Latency for bus factor calculation
+    ramp_up_latency: number;        // Latency for ramp up calculation
+    responsive_maintainer_latency: number;  // Latency for maintainer responsiveness
+    license_score_latency: number;  // Latency for license score calculation
+    good_pinning_practice_latency: number;  // Latency for pinning practice
+    pull_request_latency: number;   // Latency for pull request metric
+    correctness_latency: number;    // Latency for correctness calculation
+    net_score_latency: number;      // Latency for net score calculation
 }
 
 export interface DownloadTableItem {

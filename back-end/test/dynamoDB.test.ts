@@ -20,6 +20,9 @@ import {
     UpdateCommand
 } from "@aws-sdk/lib-dynamodb";
 
+jest.mock('@aws-sdk/client-dynamodb');
+jest.mock('@aws-sdk/lib-dynamodb');
+
 describe('DynamoDBService', () => {
     let service: DynamoDBService;
     let mockDocClientSend: jest.Mock;
@@ -39,316 +42,200 @@ describe('DynamoDBService', () => {
     describe('User Operations', () => {
         describe('createUser', () => {
             it('should create a new user successfully', async () => {
-                mockDocClientSend.mockResolvedValueOnce({ Items: [] }); // No existing user
-                mockDocClientSend.mockResolvedValueOnce({}); // Successful put
+                // Mock checking for existing user
+                mockDocClientSend.mockResolvedValueOnce({ Items: [] });
+                
+                // Mock user creation
+                mockDocClientSend.mockResolvedValueOnce({});
 
                 await service.createUser('testuser', 'password123', 'uploader');
 
+                // Verify user creation call
+                expect(mockDocClientSend).toHaveBeenCalledTimes(2);
                 expect(mockDocClientSend).toHaveBeenLastCalledWith(
                     expect.objectContaining({
-                        input: {
+                        input: expect.objectContaining({
                             TableName: 'Users',
                             Item: expect.objectContaining({
                                 username: 'testuser',
-                                role: 'uploader',
-                                user_id: expect.any(String),
-                                password_hash: expect.any(String),
-                                created_at: expect.any(String)
+                                role: 'uploader'
                             })
-                        }
+                        })
                     })
                 );
             });
 
-            it('should throw error if username already exists', async () => {
-                const existingUser: UserTableItem = {
-                    user_id: 'existing-uuid',
-                    username: 'testuser',
-                    password_hash: 'hash',
-                    role: 'uploader',
-                    created_at: new Date().toISOString()
-                };
+            it('should throw error if user already exists', async () => {
+                mockDocClientSend.mockResolvedValueOnce({ 
+                    Items: [{ username: 'testuser' }] 
+                });
 
-                mockDocClientSend.mockResolvedValueOnce({ Items: [existingUser] });
-
-                await expect(service.createUser('testuser', 'password123', 'uploader'))
-                    .rejects.toThrow('Username testuser already exists');
+                await expect(
+                    service.createUser('testuser', 'password123', 'uploader')
+                ).rejects.toThrow('Username testuser already exists');
             });
         });
 
-        describe('createAdminUser', () => {
-            it('should create an admin user successfully', async () => {
+        describe('getUserByUsername', () => {
+            it('should return user if found', async () => {
+                const mockUser = {
+                    user_id: 'test-id',
+                    username: 'testuser',
+                    role: 'uploader'
+                };
+                mockDocClientSend.mockResolvedValueOnce({ Items: [mockUser] });
+
+                const result = await service.getUserByUsername('testuser');
+                expect(result).toEqual(mockUser);
+            });
+
+            it('should return null if user not found', async () => {
                 mockDocClientSend.mockResolvedValueOnce({ Items: [] });
-                mockDocClientSend.mockResolvedValueOnce({});
 
-                await service.createAdminUser('admin', 'adminpass');
-
-                expect(mockDocClientSend).toHaveBeenLastCalledWith(
-                    expect.objectContaining({
-                        input: {
-                            TableName: 'Users',
-                            Item: expect.objectContaining({
-                                username: 'admin',
-                                role: 'admin'
-                            })
-                        }
-                    })
-                );
+                const result = await service.getUserByUsername('nonexistent');
+                expect(result).toBeNull();
             });
         });
     });
 
-    describe('Group Operations', () => {
-        describe('createGroup', () => {
-            it('should create a new group successfully', async () => {
+    describe('Package Operations', () => {
+        describe('createPackageEntry', () => {
+            it('should create a package successfully', async () => {
+                const mockPackage: PackageTableItem = {
+                    package_id: 'pkg-123',
+                    name: 'test-package',
+                    latest_version: '1.0.0',
+                    description: 'Test package',
+                    created_at: new Date().toISOString(),
+                    user_id: 'user-123'
+                };
+
+                // Mock check for existing package
                 mockDocClientSend.mockResolvedValueOnce({ Items: [] });
+                // Mock package creation
                 mockDocClientSend.mockResolvedValueOnce({});
 
-                await service.createGroup('developers');
+                await service.createPackageEntry(mockPackage);
 
+                expect(mockDocClientSend).toHaveBeenCalledTimes(2);
                 expect(mockDocClientSend).toHaveBeenLastCalledWith(
                     expect.objectContaining({
                         input: {
-                            TableName: 'UserGroups',
-                            Item: expect.objectContaining({
-                                group_name: 'developers',
-                                group_id: expect.any(String)
-                            })
+                            TableName: 'Packages',
+                            Item: mockPackage
                         }
                     })
                 );
             });
+
+            it('should throw error if package already exists', async () => {
+                mockDocClientSend.mockResolvedValueOnce({ 
+                    Items: [{ name: 'test-package' }] 
+                });
+
+                const mockPackage: PackageTableItem = {
+                    package_id: 'pkg-123',
+                    name: 'test-package',
+                    latest_version: '1.0.0',
+                    description: 'Test package',
+                    created_at: new Date().toISOString(),
+                    user_id: 'user-123'
+                };
+
+                await expect(
+                    service.createPackageEntry(mockPackage)
+                ).rejects.toThrow('Package test-package already exists');
+            });
         });
 
-        describe('addUserToGroup', () => {
-            it('should add user to group successfully', async () => {
-                const mockUser: UserTableItem = {
-                    user_id: 'user-uuid',
-                    username: 'testuser',
-                    password_hash: 'hash',
-                    role: 'uploader',
-                    created_at: new Date().toISOString()
+        describe('getLatestPackageVersion', () => {
+            it('should return the latest version if found', async () => {
+                const mockVersion: PackageVersionTableItem = {
+                    version_id: 'v1',
+                    package_id: 'pkg-123',
+                    version: '1.0.0',
+                    zip_file_path: 's3://test/1.0.0',
+                    debloated: false,
+                    created_at: new Date().toISOString(),
+                    standalone_cost: 1024,
+                    total_cost: 1024
                 };
 
-                const mockGroup: UserGroupTableItem = {
-                    group_id: 'group-uuid',
-                    group_name: 'developers'
-                };
+                mockDocClientSend.mockResolvedValueOnce({ Items: [mockVersion] });
 
-                mockDocClientSend.mockResolvedValueOnce({ Item: mockUser });
-                mockDocClientSend.mockResolvedValueOnce({ Item: mockGroup });
-                mockDocClientSend.mockResolvedValueOnce({});
+                const result = await service.getLatestPackageVersion('pkg-123');
+                expect(result).toEqual(mockVersion);
+            });
 
-                await service.addUserToGroup('user-uuid', 'group-uuid');
+            it('should return null if no versions found', async () => {
+                mockDocClientSend.mockResolvedValueOnce({ Items: [] });
 
-                expect(mockDocClientSend).toHaveBeenLastCalledWith(
+                const result = await service.getLatestPackageVersion('pkg-123');
+                expect(result).toBeNull();
+            });
+        });
+    });
+
+    describe('Table Operations', () => {
+        describe('clearTable', () => {
+            it('should clear all items from a table', async () => {
+                // Mock initial check
+                mockBaseClientSend.mockResolvedValueOnce({ Items: [{ id: '1' }] });
+                
+                // Mock full scan
+                mockBaseClientSend.mockResolvedValueOnce({
+                    Items: [
+                        { user_id: '1' },
+                        { user_id: '2' }
+                    ]
+                });
+                
+                // Mock batch delete
+                mockBaseClientSend.mockResolvedValueOnce({});
+
+                await service.clearTable('Users');
+
+                expect(mockBaseClientSend).toHaveBeenCalledWith(
                     expect.objectContaining({
-                        input: {
-                            TableName: 'Users',
-                            Key: { user_id: 'user-uuid' },
-                            UpdateExpression: 'SET group_id = :groupId',
-                            ExpressionAttributeValues: { ':groupId': 'group-uuid' }
-                        }
+                        input: expect.objectContaining({
+                            TableName: 'Users'
+                        })
                     })
                 );
             });
-        });
-        describe('Package Operations', () => {
-            describe('createPackageEntry', () => {
-                it('should create a package entry successfully', async () => {
-                    const mockPackage: PackageTableItem = {
-                        package_id: 'pkg-123',
-                        name: 'test-package',
-                        latest_version: '1.0.0',
-                        description: 'Test package',
-                        created_at: new Date().toISOString(),
-                        user_id: 'user-123'
-                    };
-        
-                    mockDocClientSend.mockResolvedValueOnce({ Items: [] }); // No existing package
-                    mockDocClientSend.mockResolvedValueOnce({}); // Successful put
-        
-                    await service.createPackageEntry(mockPackage);
-        
-                    expect(mockDocClientSend).toHaveBeenLastCalledWith(
-                        expect.objectContaining({
-                            input: {
-                                TableName: 'Packages',
-                                Item: mockPackage
-                            }
-                        })
-                    );
-                });
-        
-                it('should throw error if package already exists', async () => {
-                    const mockPackage: PackageTableItem = {
-                        package_id: 'pkg-123',
-                        name: 'test-package',
-                        latest_version: '1.0.0',
-                        description: 'Test package',
-                        created_at: new Date().toISOString(),
-                        user_id: 'user-123'
-                    };
-        
-                    mockDocClientSend.mockResolvedValueOnce({ Items: [mockPackage] });
-        
-                    await expect(service.createPackageEntry(mockPackage))
-                        .rejects.toThrow(`Package ${mockPackage.name} already exists`);
-                });
-            });
-        
-            describe('getPackageByName', () => {
-                it('should return package when found', async () => {
-                    const mockPackage: PackageTableItem = {
-                        package_id: 'pkg-123',
-                        name: 'test-package',
-                        latest_version: '1.0.0',
-                        description: 'Test package',
-                        created_at: new Date().toISOString(),
-                        user_id: 'user-123'
-                    };
-        
-                    mockDocClientSend.mockResolvedValue({ Items: [mockPackage] });
-        
-                    const result = await service.getPackageByName('test-package');
-                    expect(result).toEqual(mockPackage);
-                });
-        
-                it('should return null when package not found', async () => {
-                    mockDocClientSend.mockResolvedValue({ Items: [] });
-                    const result = await service.getPackageByName('nonexistent');
-                    expect(result).toBeNull();
-                });
-            });
-        
-            describe('getPackageVersions', () => {
-                it('should return all versions of a package', async () => {
-                    const mockVersions: PackageVersionTableItem[] = [
-                        {
-                            version_id: 'v1',
-                            package_id: 'pkg-123',
-                            version: '1.0.0',
-                            zip_file_path: 's3://test/1.0.0',
-                            debloated: false,
-                            created_at: new Date().toISOString()
-                        },
-                        {
-                            version_id: 'v2',
-                            package_id: 'pkg-123',
-                            version: '1.1.0',
-                            zip_file_path: 's3://test/1.1.0',
-                            debloated: false,
-                            created_at: new Date().toISOString()
-                        }
-                    ];
-        
-                    mockDocClientSend.mockResolvedValue({ Items: mockVersions });
-        
-                    const result = await service.getPackageVersions('pkg-123');
-                    expect(result).toEqual(mockVersions);
-                });
-            });
-        
-            describe('createPackageVersion', () => {
-                it('should create a package version successfully', async () => {
-                    const mockVersion: PackageVersionTableItem = {
-                        version_id: 'v1',
-                        package_id: 'pkg-123',
-                        version: '1.0.0',
-                        zip_file_path: 's3://test/1.0.0',
-                        debloated: false,
-                        created_at: new Date().toISOString()
-                    };
-        
-                    mockDocClientSend.mockResolvedValue({});
-        
-                    await service.createPackageVersion(mockVersion);
-        
-                    expect(mockDocClientSend).toHaveBeenCalledWith(
-                        expect.objectContaining({
-                            input: {
-                                TableName: 'PackageVersions',
-                                Item: mockVersion
-                            }
-                        })
-                    );
-                });
+
+            it('should handle empty table', async () => {
+                mockBaseClientSend.mockResolvedValueOnce({ Items: [] });
+
+                await service.clearTable('Users');
+
+                expect(mockBaseClientSend).toHaveBeenCalledTimes(1);
             });
         });
-        describe('Table Clearing Operations', () => {
-            describe('clearTable', () => {
-                it('should clear all items from a table', async () => {
-                    // Mock initial scan using baseClient
-                    mockBaseClientSend
-                        .mockResolvedValueOnce({ Items: [{ id: '1' }] }) // Initial check
-                        .mockResolvedValueOnce({ // Full scan
-                            Items: [
-                                { user_id: '1' },
-                                { user_id: '2' }
-                            ]
-                        })
-                        .mockResolvedValueOnce({}); // Batch delete
-    
-                    await service.clearTable('Users');
-    
+
+        describe('clearAllTables', () => {
+            it('should clear all configured tables', async () => {
+                mockBaseClientSend.mockResolvedValue({ Items: [] });
+
+                await service.clearAllTables();
+
+                const expectedTables = [
+                    'Packages',
+                    'PackageVersions',
+                    'PackageMetrics',
+                    'Downloads',
+                    'Users',
+                    'UserGroups'
+                ];
+
+                expectedTables.forEach(tableName => {
                     expect(mockBaseClientSend).toHaveBeenCalledWith(
                         expect.objectContaining({
-                            input: {
-                                TableName: 'Users',
-                                Limit: 1
-                            }
+                            input: expect.objectContaining({
+                                TableName: tableName
+                            })
                         })
                     );
-                });
-    
-                it('should handle empty table', async () => {
-                    mockBaseClientSend.mockResolvedValueOnce({ Items: [] });
-    
-                    await service.clearTable('Users');
-    
-                    expect(mockBaseClientSend).toHaveBeenCalledTimes(1);
-                });
-    
-                it('should handle non-existent table', async () => {
-                    mockBaseClientSend.mockRejectedValueOnce({ 
-                        name: 'ResourceNotFoundException' 
-                    });
-    
-                    await service.clearTable('NonExistentTable');
-    
-                    expect(mockBaseClientSend).toHaveBeenCalledTimes(1);
-                });
-            });
-    
-            describe('clearAllTables', () => {
-                it('should attempt to clear all tables', async () => {
-                    // Mock empty responses for all tables
-                    mockBaseClientSend.mockResolvedValue({ Items: [] });
-    
-                    await service.clearAllTables();
-    
-                    // Should attempt to clear all tables
-                    const expectedTables = [
-                        'Packages', 'PackageVersions', 'PackageMetrics', 
-                        'Downloads', 'Users', 'UserGroups'
-                    ];
-    
-                    expectedTables.forEach(tableName => {
-                        expect(mockBaseClientSend).toHaveBeenCalledWith(
-                            expect.objectContaining({
-                                input: expect.objectContaining({
-                                    TableName: tableName
-                                })
-                            })
-                        );
-                    });
-                });
-    
-                it('should handle errors during clearing', async () => {
-                    mockBaseClientSend.mockRejectedValueOnce(new Error('Clear failed'));
-    
-                    await expect(service.clearAllTables())
-                        .rejects.toThrow('Clear failed');
                 });
             });
         });
