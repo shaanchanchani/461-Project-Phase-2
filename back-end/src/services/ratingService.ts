@@ -2,15 +2,15 @@
 import { log } from '../logger';
 import { PackageRating } from '../types';
 import { MetricService } from './metricService';
-import { DynamoDBService, dynamoDBService } from './dynamoDBService';
+import { packageDynamoService } from './dynamoServices';
 
 export class RatingService {
     private metricService: MetricService;
-    private db: DynamoDBService;
+    private db: any;
 
-    constructor(metricService?: MetricService, db?: DynamoDBService) {
+    constructor(metricService?: MetricService, db?: any) {
         this.metricService = metricService || new MetricService();
-        this.db = db || dynamoDBService;
+        this.db = db || packageDynamoService;
     }
 
     async calculateRating(packageId: string): Promise<PackageRating> {

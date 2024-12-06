@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { DynamoDBService, dynamoDBService } from './dynamoDBService';
+import { PackageDynamoService, packageDynamoService } from './dynamoServices';
 import { S3Service } from './s3Service';
 import { log } from '../logger';
 import { URL } from 'url';
@@ -11,12 +11,12 @@ import { GetNetScore } from '../metrics/netScore';
 import { metricService } from './metricService';
 
 export class PackageUploadService {
-  private db: DynamoDBService;
+  private db: PackageDynamoService;
   private s3Service: S3Service;
   private githubHeaders: Record<string, string>;
 
   constructor() {
-    this.db = dynamoDBService;
+    this.db = packageDynamoService;
     this.s3Service = new S3Service();
     this.githubHeaders = {
       'Accept': 'application/vnd.github.v3+json',
@@ -276,9 +276,22 @@ export class PackageUploadService {
   }
 
   private validateUrl(url: string): void {
-    const urlObj = new URL(url);
-    if (urlObj.hostname !== 'github.com' && urlObj.hostname !== 'www.npmjs.com') {
-      throw new Error('Invalid URL format. Please use a valid GitHub (github.com/owner/repo or github.com/owner/repo/tree/version) or npm (npmjs.com/package/name) URL');
+    try {
+      // First check if it's a valid URL
+      new URL(url);
+      
+      // Then check if it's a valid GitHub or npm URL
+      const urlType = checkUrlType(url);
+      if (urlType === UrlType.Invalid) {
+        throw new Error('Invalid URL format. Please use one of these formats:\n' +
+          '- GitHub: github.com/owner/repo or github.com/owner/repo/tree/version\n' +
+          '- npm: npmjs.com/package/name or npmjs.com/package/name/v/version');
+      }
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error('Invalid URL format. Please provide a valid URL.');
+      }
+      throw error;
     }
   }
 
@@ -406,6 +419,7 @@ export class PackageUploadService {
     
     // Handle version in URL if present
     if (pathParts.length >= 4 && pathParts[2] === 'tree') {
+      // Keep the version exactly as it appears in the URL
       ref = pathParts[3];
     }
     
@@ -414,17 +428,33 @@ export class PackageUploadService {
     try {
       // Get the zipball from GitHub, with version if specified
       const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball${ref ? `/${ref}` : ''}`;
+      log.info(`Fetching GitHub zipball from: ${zipUrl}`);
+      
       const response = await axios.get(zipUrl, { 
         headers: this.githubHeaders,
-        responseType: 'arraybuffer'  // Important: we want the raw binary data
+        responseType: 'stream',  // Changed to stream for large files
+        maxContentLength: Infinity,  // Remove size limit
+        maxBodyLength: Infinity
       });
 
-      const zipBuffer = Buffer.from(response.data);
-      return {
-        zipBuffer,
-        base64Content: zipBuffer.toString('base64')
-      };
-    } catch (error) {
+      // Convert stream to buffer using chunking
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        response.data.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.data.on('end', () => {
+          const zipBuffer = Buffer.concat(chunks);
+          resolve({
+            zipBuffer,
+            base64Content: zipBuffer.toString('base64')
+          });
+        });
+        response.data.on('error', (err: Error) => reject(err));
+      });
+
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`GitHub repository or version not found: ${owner}/${repo}${ref ? ` version ${ref}` : ''}`);
+      }
       throw error;
     }
   }
@@ -433,37 +463,73 @@ export class PackageUploadService {
     try {
       log.info('Processing npm URL...');
       const packagePath = url.split('/package/')[1];
-
-      // Handle scoped packages with versions
-      let packageName, version;
-      if (packagePath.startsWith('@')) {
-        // Scoped package
-        const scopedParts = packagePath.split('@');
-        if (scopedParts.length === 3) {
-          // Has version
-          packageName = `@${scopedParts[1]}`;
-          version = scopedParts[2];
-        } else {
-          // No version
-          packageName = scopedParts[0];
-          version = scopedParts[1];
+      if (!packagePath) {
+        throw new Error('Invalid npm URL format: missing package path');
+      }
+      
+      // Handle scoped packages and versions
+      let packageName: string | undefined;
+      let version: string | undefined;
+      
+      // First try to extract package name and version using various patterns
+      const patterns = [
+        // /v/ format: package/v/version
+        /^(.+?)\/v\/(.+)$/,
+        // /versions/ format: package/versions/version
+        /^(.+?)\/versions\/(.+)$/,
+        // @ format: package@version
+        /^(.+?)@(.+)$/
+      ];
+      
+      let matched = false;
+      for (const pattern of patterns) {
+        const match = packagePath.match(pattern);
+        if (match) {
+          packageName = match[1];
+          version = match[2];
+          matched = true;
+          break;
         }
-      } else {
-        // Non-scoped package
-        [packageName, version] = packagePath.split('@');
+      }
+      
+      // If no pattern matched, use the whole path as package name
+      if (!matched) {
+        packageName = packagePath;
+      }
+      
+      // Handle scoped packages (@org/package)
+      if (packageName && packageName.includes('/') && !packageName.startsWith('@')) {
+        // If there's a slash but not a scoped package, take the first part
+        packageName = packageName.split('/')[0];
+      }
+      
+      // Special handling for scoped packages with @ version
+      if (packageName && packageName.startsWith('@')) {
+        const scopedMatch = packageName.match(/^(@[^@]+)@(.+)$/);
+        if (scopedMatch) {
+          packageName = scopedMatch[1];
+          version = scopedMatch[2];
+        }
       }
 
-      // Fetch package info
+      if (!packageName) {
+        throw new Error('Failed to extract package name from npm URL');
+      }
+
+      log.info(`Extracted package name: ${packageName}, version: ${version || 'latest'}`);
+
+      // First fetch the npm package info to get the GitHub URL
       const npmUrl = `https://registry.npmjs.org/${packageName}`;
+      log.info(`Fetching npm package info from: ${npmUrl}`);
       const response = await axios.get(npmUrl);
 
-      // Get the specific version data if available
+      // Get the repository URL from the package data
       const repositoryUrl = response.data.repository?.url;
-
       if (!repositoryUrl) {
         throw new Error(`GitHub repository URL not found for ${packageName}`);
       }
 
+      // Clean up the repository URL
       const sanitizedUrl = repositoryUrl
         .replace("git+", "")
         .replace(".git", "")
@@ -472,12 +538,13 @@ export class PackageUploadService {
         .replace('git+https://github.com/', 'https://github.com/')
         .replace('git+ssh://git@github.com/', 'https://github.com/');
 
-      
+      // If we extracted a version from the npm URL, append it to the GitHub URL
       if (version) {
         const sanitizedVersionUrl = `${sanitizedUrl}/tree/v${version}`;
         log.info(`Using version-specific URL: ${sanitizedVersionUrl}`);
         return sanitizedVersionUrl;
-      } 
+      }
+
       log.info(`Using default URL: ${sanitizedUrl}`);
       return sanitizedUrl;
     } catch (error: any) {

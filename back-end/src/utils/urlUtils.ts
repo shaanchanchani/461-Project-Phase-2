@@ -27,7 +27,7 @@ export function checkUrlType(url: string): UrlType {
 
   // Updated patterns to be more flexible
   const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/[^\/]+)?\/?$/;
-  const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)(?:\/v\/([^\/]+))?\/?$/;
+  const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/(@[^\/]+\/[^\/]+|[^\/]+)(?:\/v\/([^\/]+))?\/?$/;
 
   log.info(`Testing URL against patterns:
     GitHub: ${githubPattern.test(url)}
@@ -110,7 +110,7 @@ export function extractPackageNameFromUrl(url: string): string {
   const trimmedUrl = url.trim();
 
   // Regex to match npm package URL
-  const npmRegex = /https:\/\/www\.npmjs\.com\/package\/([^\/]+)/;
+  const npmRegex = /https:\/\/www\.npmjs\.com\/package\/(@[^\/]+\/[^\/]+|[^\/]+)/;
   const npmMatch = trimmedUrl.match(npmRegex);
 
   if (npmMatch && npmMatch.length >= 2) {

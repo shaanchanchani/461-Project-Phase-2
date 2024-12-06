@@ -1,14 +1,32 @@
+// Mock the logger first to prevent process.exit
+jest.mock('../src/logger', () => ({
+    log: {
+        info: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn()
+    }
+}));
+
 import { CostController } from '../src/controllers/costController';
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../src/middleware/auth';
-import { costService } from '../src/services/costService';
+import { CostService, costService } from '../src/services/costService';
 
 // Mock the cost service
-jest.mock('../src/services/costService', () => ({
-    costService: {
-        calculatePackageCost: jest.fn()
-    }
-}));
+jest.mock('../src/services/costService', () => {
+    const mockCalculatePackageCost = jest.fn();
+    const MockCostService = jest.fn().mockImplementation(() => ({
+        calculatePackageCost: mockCalculatePackageCost
+    }));
+
+    return {
+        CostService: MockCostService,
+        costService: {
+            calculatePackageCost: mockCalculatePackageCost
+        }
+    };
+});
 
 describe('CostController', () => {
     let controller: CostController;
@@ -93,6 +111,23 @@ describe('CostController', () => {
 
             expect(mockStatus).toHaveBeenCalledWith(500);
             expect(mockJson).toHaveBeenCalledWith({ error: 'Failed to calculate package cost' });
+        });
+
+        it('should handle unexpected errors', async () => {
+            // Make the request object throw when accessing properties
+            const throwingRequest = {
+                params: undefined as any,  
+                query: {},
+                get(prop: string) {
+                    if (prop === 'params') throw new Error('Unexpected error');
+                    return undefined;
+                }
+            };
+
+            await controller.getPackageCost(throwingRequest as AuthenticatedRequest, mockResponse as Response);
+
+            expect(mockStatus).toHaveBeenCalledWith(500);
+            expect(mockJson).toHaveBeenCalledWith({ error: 'Internal server error' });
         });
 
         it('should consider includeDependencies query parameter', async () => {

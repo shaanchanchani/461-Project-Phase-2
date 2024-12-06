@@ -1,15 +1,21 @@
 import request from 'supertest';
 import express, { Application } from 'express';
 import router from '../src/routes';
-import { packageController } from '../src/controllers/packageController';
+import { downloadController } from '../src/controllers/downloadController';
+import { uploadController } from '../src/controllers/uploadController';
 import { authMiddleware, AuthController } from '../src/middleware/auth';
 import { Server } from 'http';
 
-jest.mock('../src/controllers/packageController', () => ({
-    packageController: {
+jest.mock('../src/controllers/downloadController', () => ({
+    downloadController: {
         getPackageById: jest.fn().mockImplementation((req, res) => {
             res.json({ success: true });
-        }),
+        })
+    }
+}));
+
+jest.mock('../src/controllers/uploadController', () => ({
+    uploadController: {
         createPackage: jest.fn().mockImplementation((req, res) => {
             res.json({ success: true });
         })
@@ -56,16 +62,16 @@ describe('Routes', () => {
             jest.clearAllMocks();
         });
 
-        test('GET /package/:id should call packageController.getPackageById', async () => {
+        test('GET /package/:id should call downloadController.getPackageById', async () => {
             const response = await request(server)
                 .get('/package/123')
                 .set('X-Authorization', 'test-token');
             
-            expect(packageController.getPackageById).toHaveBeenCalled();
+            expect(downloadController.getPackageById).toHaveBeenCalled();
             expect(response.status).toBe(200);
         });
 
-        test('POST /package should call packageController.createPackage with URL', async () => {
+        test('POST /package should call uploadController.createPackage with URL', async () => {
             const response = await request(server)
                 .post('/package')
                 .set('X-Authorization', 'test-token')
@@ -77,11 +83,11 @@ describe('Routes', () => {
                     }
                 });
             
-            expect(packageController.createPackage).toHaveBeenCalled();
+            expect(uploadController.createPackage).toHaveBeenCalled();
             expect(response.status).toBe(200);
         });
 
-        test('POST /package should call packageController.createPackage with Content', async () => {
+        test('POST /package should call uploadController.createPackage with Content', async () => {
             const response = await request(server)
                 .post('/package')
                 .set('X-Authorization', 'test-token')
@@ -93,7 +99,7 @@ describe('Routes', () => {
                     }
                 });
             
-            expect(packageController.createPackage).toHaveBeenCalled();
+            expect(uploadController.createPackage).toHaveBeenCalled();
             expect(response.status).toBe(200);
         });
     });

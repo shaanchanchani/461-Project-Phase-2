@@ -1,9 +1,13 @@
 // src/routes.ts
 import express, { Request, Response, NextFunction, RequestHandler } from 'express';
-import { packageController } from './controllers/packageController';
+// import { packageController } from './controllers/packageController';
 import { SearchController } from './controllers/searchController';
-import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
+import { resetController } from './controllers/resetController';
 import { costController } from './controllers/costController';
+import { uploadController } from './controllers/uploadController';
+import { ratingController } from './controllers/ratingController';
+import {downloadController} from './controllers/downloadController'
+import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
 import { log } from './logger';
 
 const router = express.Router();
@@ -27,22 +31,22 @@ router.put('/authenticate', asyncHandler(AuthController.authenticate));
 router.use(authMiddleware);
 
 // Package Search and List Endpoints
-router.post('/packages', asyncHandler(packageController.listPackages));
-router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
+// router.post('/packages', asyncHandler(packageController.listPackages));
+// router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
 
 // Package Retrieval Endpoints
-router.get('/package/:id', asyncHandler(packageController.getPackageById));
+router.get('/package/:id', asyncHandler(downloadController.getPackageById));
 
 // Package Rating Endpoints
-router.get('/package/:id/rate', asyncHandler(packageController.ratePackage));
+router.get('/package/:id/rate', asyncHandler(ratingController.ratePackage));
 
 // Package Cost Endpoint
 router.get('/package/:id/cost', asyncHandler(costController.getPackageCost));
 
 // Package Upload Endpoint
-router.post('/package', asyncHandler(packageController.createPackage));
+router.post('/package', asyncHandler(uploadController.createPackage));
 
 // Registry Reset Endpoint
-router.delete('/reset', asyncHandler(packageController.resetRegistry));
+router.delete('/reset', asyncHandler(resetController.resetRegistry));
 
 export default router;

@@ -1,16 +1,18 @@
 import { S3Service } from './s3Service';
-import { DynamoDBService, dynamoDBService } from './dynamoDBService';
+import { packageDynamoService, downloadDynamoService } from './dynamoServices';
 import { log } from '../logger';
 import { Package } from '../types';
 import * as crypto from 'crypto';
 
 export class PackageDownloadService {
     private s3Service: S3Service;
-    private db: DynamoDBService;
+    private packageDb: any;
+    private downloadDb: any;
 
     constructor() {
         this.s3Service = new S3Service();
-        this.db = dynamoDBService;
+        this.packageDb = packageDynamoService;
+        this.downloadDb = downloadDynamoService;
     }
 
     /**
@@ -22,7 +24,7 @@ export class PackageDownloadService {
     public async getPackageById(packageId: string, userName: string): Promise<Package> {
         try {
             // Get package data from DynamoDB
-            const packageData = await this.db.getPackageById(packageId);
+            const packageData = await this.packageDb.getPackageById(packageId);
             if (!packageData) {
                 throw new Error('Package not found');
             }
@@ -36,7 +38,7 @@ export class PackageDownloadService {
             const base64Content = content.toString('base64');
 
             // Record the download
-            await this.db.recordDownload({
+            await this.downloadDb.recordDownload({
                 download_id: crypto.randomUUID(),
                 package_id: packageId,
                 user_id: userName,

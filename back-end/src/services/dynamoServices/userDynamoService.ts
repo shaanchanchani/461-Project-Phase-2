@@ -268,6 +268,37 @@ export class UserDynamoService extends BaseDynamoService {
         }
     }
 
+    /**
+     * Delete a user by their ID
+     * @param userId - ID of the user to delete
+     */
+    async deleteUser(userId: string): Promise<void> {
+        try {
+            const user = await this.getUserById(userId);
+            if (!user) {
+                throw new Error(`User ${userId} does not exist`);
+            }
+
+            // First remove user from their group if they're in one
+            if (user.group_id) {
+                await this.removeUserFromGroup(userId);
+            }
+
+            // Then delete the user
+            await this.docClient.send(new DeleteCommand({
+                TableName: USERS_TABLE,
+                Key: {
+                    user_id: userId
+                }
+            }));
+
+            log.info(`Successfully deleted user ${userId}`);
+        } catch (error) {
+            log.error('Error deleting user:', error);
+            throw error;
+        }
+    }
+
     protected extractKeyFromItem(tableName: string, item: Record<string, any>): Record<string, any> {
         switch (tableName) {
             case USERS_TABLE:

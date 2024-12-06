@@ -1,12 +1,12 @@
-import { DynamoDBService, dynamoDBService } from './dynamoDBService';
+import { packageDynamoService } from './dynamoServices';
 import { log } from '../logger';
 import { PackageCost } from '../types';
 
-export class CostService {
-    private db: DynamoDBService;
+class CostService {
+    private db: any;
 
     constructor() {
-        this.db = dynamoDBService;
+        this.db = packageDynamoService;
     }
 
     /**
@@ -45,4 +45,6 @@ export class CostService {
     }
 }
 
+// Export both the class and a singleton instance
+export { CostService };
 export const costService = new CostService();

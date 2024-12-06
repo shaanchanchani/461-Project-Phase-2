@@ -1,30 +1,43 @@
 import { PackageDownloadService } from '../src/services/packageDownloadService';
-import { DynamoDBService } from '../src/services/dynamoDBService';
+import { downloadDynamoService, packageDynamoService } from '../src/services/dynamoServices';
 import { S3Service } from '../src/services/s3Service';
 import { Package } from '../src/types';
 
-jest.mock('../src/services/dynamoDBService');
-jest.mock('../src/services/s3Service');
-jest.mock('../src/logger');
+// Mock the logger first to prevent process.exit
+jest.mock('../src/logger', () => ({
+    log: {
+        info: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn()
+    }
+}));
+
+// Mock the services
+const mockGetPackageContent = jest.fn();
+jest.mock('../src/services/s3Service', () => {
+    return {
+        S3Service: jest.fn().mockImplementation(() => ({
+            getPackageContent: mockGetPackageContent
+        }))
+    };
+});
+
+jest.mock('../src/services/dynamoServices', () => ({
+    downloadDynamoService: {
+        recordDownload: jest.fn()
+    },
+    packageDynamoService: {
+        getPackageById: jest.fn()
+    }
+}));
 
 describe('PackageDownloadService', () => {
-    let service: PackageDownloadService;
-    let mockDynamoDBService: jest.Mocked<DynamoDBService>;
-    let mockS3Service: jest.Mocked<S3Service>;
+    let packageDownloadService: PackageDownloadService;
 
     beforeEach(() => {
-        mockDynamoDBService = {
-            getPackageById: jest.fn(),
-            recordDownload: jest.fn()
-        } as unknown as jest.Mocked<DynamoDBService>;
-
-        mockS3Service = {
-            getPackageContent: jest.fn()
-        } as unknown as jest.Mocked<S3Service>;
-
-        service = new PackageDownloadService();
-        (service as any).db = mockDynamoDBService;
-        (service as any).s3Service = mockS3Service;
+        jest.clearAllMocks();
+        packageDownloadService = new PackageDownloadService();
     });
 
     describe('getPackageById', () => {
@@ -35,25 +48,25 @@ describe('PackageDownloadService', () => {
                 ID: '123'
             },
             data: {
-                Content: 's3://bucket/path'
+                Content: 'test-content'
             }
         };
 
         it('should get package successfully', async () => {
-            const mockContent = Buffer.from('test content');
-            mockDynamoDBService.getPackageById.mockResolvedValue(mockPackage);
-            mockS3Service.getPackageContent.mockResolvedValue(mockContent);
+            const mockContent = Buffer.from('test content').toString('base64');
+            (packageDynamoService.getPackageById as jest.Mock).mockResolvedValue(mockPackage);
+            mockGetPackageContent.mockResolvedValue(mockContent);
 
-            const result = await service.getPackageById('123', 'user123');
+            const result = await packageDownloadService.getPackageById('123', 'user123');
 
             expect(result).toEqual({
                 metadata: mockPackage.metadata,
                 data: {
-                    Content: mockContent.toString('base64')
+                    Content: mockContent
                 }
             });
 
-            expect(mockDynamoDBService.recordDownload).toHaveBeenCalledWith(expect.objectContaining({
+            expect(downloadDynamoService.recordDownload).toHaveBeenCalledWith(expect.objectContaining({
                 package_id: '123',
                 user_id: 'user123',
                 version: '1.0.0'
@@ -61,20 +74,20 @@ describe('PackageDownloadService', () => {
         });
 
         it('should throw error if package not found', async () => {
-            mockDynamoDBService.getPackageById.mockResolvedValue(null);
+            (packageDynamoService.getPackageById as jest.Mock).mockResolvedValue(null);
 
-            await expect(service.getPackageById('123', 'user123'))
+            await expect(packageDownloadService.getPackageById('123', 'user123'))
                 .rejects.toThrow('Package not found');
         });
 
-        it('should throw error if content not found', async () => {
-            const packageWithoutContent: Package = {
+        it('should throw error if package content not found', async () => {
+            const packageWithoutContent = {
                 metadata: mockPackage.metadata,
                 data: {}
             };
-            mockDynamoDBService.getPackageById.mockResolvedValue(packageWithoutContent);
+            (packageDynamoService.getPackageById as jest.Mock).mockResolvedValue(packageWithoutContent);
 
-            await expect(service.getPackageById('123', 'user123'))
+            await expect(packageDownloadService.getPackageById('123', 'user123'))
                 .rejects.toThrow('Package content not found');
         });
     });

@@ -1,13 +1,13 @@
-import { DynamoDBService, dynamoDBService } from './dynamoDBService';
+import { metricsDynamoService } from './dynamoServices';
 import { v4 as uuidv4 } from 'uuid';
 import { PackageMetricsTableItem } from '../types';
 import { log } from '../logger';
 
 export class MetricService {
-    private db: DynamoDBService;
+    private db: any;
 
-    constructor(db?: DynamoDBService) {
-        this.db = db || dynamoDBService;
+    constructor(db?: any) {
+        this.db = db || metricsDynamoService;
     }
 
     public async createMetricEntry(versionId: string, metrics: {
