@@ -9,6 +9,7 @@ import axios from 'axios';
 import AdmZip from 'adm-zip';
 import { GetNetScore } from '../metrics/netScore';
 import { metricService } from './metricService';
+import { debloatService } from './debloatService';
 
 export class PackageUploadService {
   private db: PackageDynamoService;
@@ -39,7 +40,6 @@ export class PackageUploadService {
         githubUrl = await this.handleNpmUrl(url);
       }
 
-
       // Extract package info from URL
       const { name, version, description } = await this.extractPackageInfo(githubUrl);
 
@@ -51,14 +51,23 @@ export class PackageUploadService {
           throw new Error(`Package ${name} version ${version} already exists`);
         }
       }
+
       // Check package metrics before proceeding
       const metrics = await this.checkPackageMetrics(githubUrl);
+
       // Generate unique IDs
       const packageId = existingPackage?.package_id || uuidv4();
       const versionId = uuidv4();
 
       // Fetch package content and convert to base64
-      const { zipBuffer, base64Content } = await this.fetchAndZipPackage(githubUrl);
+      let { zipBuffer, base64Content } = await this.fetchAndZipPackage(githubUrl);
+
+      // Apply debloating if requested
+      if (debloat) {
+        log.info(`Debloating package ${name} version ${version}`);
+        zipBuffer = await debloatService.debloatPackage(zipBuffer);
+        base64Content = zipBuffer.toString('base64');
+      }
 
       // Upload to S3
       const s3Key = `packages/${packageId}/content.zip`;
@@ -126,7 +135,7 @@ export class PackageUploadService {
   public async uploadPackageFromZip(content: string, jsProgram?: string, debloat: boolean = false, userId?: string): Promise<PackageUploadResponse> {
     try {
       // Decode base64 content to buffer
-      const zipBuffer = Buffer.from(content, 'base64');
+      let zipBuffer = Buffer.from(content, 'base64');
       
       // Extract package info from zip
       const zip = new AdmZip(zipBuffer);
@@ -196,6 +205,13 @@ export class PackageUploadService {
           throw new Error(`GitHub repository ${owner}/${repo} not found`);
         }
         throw error;
+      }
+
+      // Apply debloating if requested
+      if (debloat) {
+        log.info(`Debloating package ${name} version ${version}`);
+        zipBuffer = await debloatService.debloatPackage(zipBuffer);
+        content = zipBuffer.toString('base64');
       }
 
       // Check package metrics after confirming package doesn't exist and repository exists
