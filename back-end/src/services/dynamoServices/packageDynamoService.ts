@@ -139,6 +139,31 @@ export class PackageDynamoService extends BaseDynamoService {
     }
 
     /**
+     * Get raw package data by ID
+     */
+    public async getRawPackageById(id: PackageID): Promise<PackageTableItem | null> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGES_TABLE,
+                IndexName: 'package_id-index',
+                KeyConditionExpression: 'package_id = :pid',
+                ExpressionAttributeValues: {
+                    ':pid': id
+                }
+            }));
+
+            if (!result.Items || result.Items.length === 0) {
+                return null;
+            }
+
+            return result.Items[0] as PackageTableItem;
+        } catch (error) {
+            log.error('Error getting raw package by ID:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Create a new package entry
      */
     async createPackageEntry(packageData: PackageTableItem): Promise<void> {

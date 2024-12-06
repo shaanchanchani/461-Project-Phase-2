@@ -9,6 +9,7 @@ import { ratingController } from './controllers/ratingController';
 import {downloadController} from './controllers/downloadController'
 import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
 import { log } from './logger';
+import { updateController } from './controllers/updateController';
 
 const router = express.Router();
 
@@ -36,6 +37,9 @@ router.use(authMiddleware);
 
 // Package Retrieval Endpoints
 router.get('/package/:id', asyncHandler(downloadController.getPackageById));
+
+// Package Update Endpoint
+router.put('/package/:id', asyncHandler(updateController.updatePackage));
 
 // Package Rating Endpoints
 router.get('/package/:id/rate', asyncHandler(ratingController.ratePackage));
