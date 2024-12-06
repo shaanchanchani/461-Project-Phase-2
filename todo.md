@@ -12,14 +12,4 @@ Here's your complete checklist of remaining implementations:
 - [ ] Return matching packages' metadata
 - [ ] Handle 404 if no matches found
 
-□ /package (POST) - Upload/Ingest
-- [ ] Implement URL-based package ingestion
-  - [ ] Clone/download from GitHub URL
-  - [ ] Process repository content
-  - [ ] Store package data
-- [ ] Implement debloat feature
-  - [ ] Add tree shaking
-  - [ ] Handle minification
-  - [ ] Remove unnecessary files/code
-
 Would you like me to explain any of these tasks in more detail?
