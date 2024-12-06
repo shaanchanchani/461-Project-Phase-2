@@ -129,7 +129,6 @@ export class DebloatService {
 
     private async findFiles(dir: string, pattern: string): Promise<string[]> {
         try {
-            // glob v10+ uses Promises natively
             const matches = await glob(pattern, { 
                 cwd: dir, 
                 absolute: true,

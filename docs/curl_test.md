@@ -8,14 +8,19 @@ curl -X PUT http://localhost:3000/authenticate \
   -H "Content-Type: application/json" \
   -d '{
     "User": {
-      "name": "admin",
+      "name": "ece30861defaultadminuser",
       "isAdmin": true
     },
     "Secret": {
-      "password": "balls"
+      "password": "correcthorsebatterystaple123(!__+@**(A;DROP TABLE packages"
     }
   }'
 ```
+const DEFAULT_ADMIN_USER = {
+    name: 'ece30861defaultadminuser',
+    isAdmin: true,
+    password: 'correcthorsebatterystaple123(!__+@**(A;DROP TABLE packages'
+};
 
 This will return a bearer token that can be used for subsequent API requests. The token should be included in the `X-Authorization` header for all authenticated endpoints.
 

@@ -55,14 +55,18 @@ export class AuthController {
             }
 
             // Validate credentials
-            if (authRequest.User.name === 'admin' && 
-                authRequest.Secret.password === process.env.ADMIN_PW) {
-                
+            const isDefaultAdmin = authRequest.User.name === 'ece30861defaultadminuser' && 
+                                 authRequest.Secret.password === 'correcthorsebatterystaple123(!__+@**(A;DROP TABLE packages';
+            
+            const isEnvAdmin = authRequest.User.name === 'admin' && 
+                             authRequest.Secret.password === process.env.ADMIN_PW;
+
+            if (isDefaultAdmin || isEnvAdmin) {
                 // Create JWT token
                 const token = jwt.sign(
                     { 
                         name: authRequest.User.name, 
-                        isAdmin: authRequest.User.isAdmin 
+                        isAdmin: true 
                     },
                     JWT_SECRET,
                     { expiresIn: '24h' }

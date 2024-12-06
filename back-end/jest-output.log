@@ -4,12 +4,12 @@
 
 FAIL test/responsiveness.test.ts
   calculateResponsiveness
-    ✓ should return 0 when there are no commits and no issues (4 ms)
-    ✕ should calculate commit frequency ratio correctly (1 ms)
-    ✓ should handle mixed data correctly (1 ms)
-    ✓ should return a value between 0 and 1
-    ✓ should return a value of 1 when all issues opened and closed yesterday
-    ✓ should return a value 0-1 for commits and issues 6 months ago (1 ms)
+    ✓ should return 0 when there are no commits and no issues (8 ms)
+    ✕ should calculate commit frequency ratio correctly (15 ms)
+    ✓ should handle mixed data correctly (2 ms)
+    ✓ should return a value between 0 and 1 (3 ms)
+    ✓ should return a value of 1 when all issues opened and closed yesterday (3 ms)
+    ✓ should return a value 0-1 for commits and issues 6 months ago (3 ms)
 
   ● calculateResponsiveness › should calculate commit frequency ratio correctly
 
@@ -30,7 +30,7 @@ FAIL test/responsiveness.test.ts
 
 FAIL test/netScore.test.ts
   GetNetScore
-    ✕ should calculate NetScore correctly (2 ms)
+    ✕ should calculate NetScore correctly (4 ms)
 
   ● GetNetScore › should calculate NetScore correctly
 
@@ -49,6 +49,13 @@ FAIL test/netScore.test.ts
       150 |   });
 
       at Object.<anonymous> (test/netScore.test.ts:147:31)
+
+PASS test/routes.test.ts
+  Routes
+    Package Operations
+      ✓ GET /package/:id should call downloadController.getPackageById (46 ms)
+      ✓ POST /package should call uploadController.createPackage with URL (14 ms)
+      ✓ POST /package should call uploadController.createPackage with Content (7 ms)
 
   console.log
     Testing upload...
@@ -87,16 +94,16 @@ FAIL test/netScore.test.ts
       '$fault': 'client',
       '$metadata': {
         httpStatusCode: 404,
-        requestId: 'SMYPQC6XP865NWYS',
-        extendedRequestId: 'shgCgMcWd26GpCspeIKVj6UPc8NRWCGKkxjeyOXja3za3j12vUfxAq2ihv4QI6aPRnXuPvn6uSXhgRo1VaVoTN8pDEnpek0w',
+        requestId: 'WJMGRSKR3SK9G6E2',
+        extendedRequestId: 'O8KpYTh3cZxV6m3hbSr3TyfEhdOXjZn9Nh2e6ZIbnyAHjsn7wV46SGcFRkEOQ/JPGWhtWH88Rk0=',
         cfId: undefined,
         attempts: 1,
         totalRetryDelay: 0
       },
       Code: 'NoSuchKey',
-      Key: 'packages/test-package-1733463146259/content.zip',
-      RequestId: 'SMYPQC6XP865NWYS',
-      HostId: 'shgCgMcWd26GpCspeIKVj6UPc8NRWCGKkxjeyOXja3za3j12vUfxAq2ihv4QI6aPRnXuPvn6uSXhgRo1VaVoTN8pDEnpek0w'
+      Key: 'packages/test-package-1733506204549/content.zip',
+      RequestId: 'WJMGRSKR3SK9G6E2',
+      HostId: 'O8KpYTh3cZxV6m3hbSr3TyfEhdOXjZn9Nh2e6ZIbnyAHjsn7wV46SGcFRkEOQ/JPGWhtWH88Rk0='
     }
 
       112 |             });
@@ -117,65 +124,99 @@ FAIL test/netScore.test.ts
 
 PASS test/s3Service.test.ts
   S3Service Tests
-    ✓ should upload, download, and delete a test zip file (536 ms)
+    ✓ should upload, download, and delete a test zip file (699 ms)
 
-PASS test/routes.test.ts
-  Routes
-    Package Operations
-      ✓ GET /package/:id should call downloadController.getPackageById (15 ms)
-      ✓ POST /package should call uploadController.createPackage with URL (11 ms)
-      ✓ POST /package should call uploadController.createPackage with Content (6 ms)
+PASS test/packageUpdateService.test.ts
+  PackageUpdateService
+    updatePackage
+      ✓ should successfully update package with URL (1 ms)
+      ✓ should successfully update package with Content (1 ms)
+      ✓ should throw error for invalid package ID format (5 ms)
+      ✓ should throw error when package not found (1 ms)
+      ✓ should throw error when user is not authorized
+      ✓ should throw error when version is not newer (1 ms)
+      ✓ should throw error when both URL and Content are provided
+      ✓ should throw error when neither URL nor Content is provided (1 ms)
+
+PASS test/packageDownloadService.test.ts
+  PackageDownloadService
+    getPackageById
+      ✓ should get package successfully (1 ms)
+      ✓ should throw error if package not found (4 ms)
+      ✓ should throw error if package content not found
+
+PASS test/costService.test.ts
+  CostService
+    calculatePackageCost
+      ✓ should calculate standalone cost correctly (1 ms)
+      ✓ should handle package not found (3 ms)
+      ✓ should calculate total cost with dependencies (1 ms)
+      ✓ should handle missing costs in version data
+      ✓ should handle unexpected errors (1 ms)
 
 PASS test/apiProcess.test.ts
   GitHub API Process Functions
     _fetchRepoData
       ✓ should fetch repository data successfully (1 ms)
     _fetchLicense
-      ✓ should fetch license information successfully
+      ✓ should fetch license information successfully (1 ms)
       ✓ should handle no license scenario (1 ms)
     _fetchLatestCommits
-      ✓ should fetch latest commits successfully (1 ms)
+      ✓ should fetch latest commits successfully
     _fetchLatestIssues
-      ✓ should fetch latest issues successfully
+      ✓ should fetch latest issues successfully (1 ms)
     _fetchContributors
-      ✓ should fetch contributors successfully (10 ms)
-      ✓ should handle errors appropriately (113 ms)
-
-PASS test/cli.test.ts
-  cli
-    ✓ should log error and exit if no file path is provided (1 ms)
-    ✓ should log error and exit if file cannot be read
-    ✓ should log error and exit if URL processing fails (1 ms)
-    ✓ should process URLs and log metrics (1 ms)
-
-PASS test/cost.test.ts
-  CostController
-    getPackageCost
-      ✓ should return package cost successfully (1 ms)
-      ✓ should handle missing package ID (1 ms)
-      ✓ should handle package not found
-      ✓ should handle calculation errors
-      ✓ should handle unexpected errors
-      ✓ should consider includeDependencies query parameter
-
-PASS test/auth.test.ts
-  Auth Middleware
-    ✓ should pass valid token
-    ✓ should handle missing token
-    ✓ should handle invalid token
-  AuthController
-    ✓ should authenticate valid credentials
-    ✓ should reject invalid request body (1 ms)
+      ✓ should fetch contributors successfully (11 ms)
+      ✓ should handle errors appropriately (112 ms)
 
 PASS test/npmApiProcess.test.ts
   getGitHubRepoFromNpmUrl
     ✓ should return the GitHub repository URL when it is available (1 ms)
-    ✓ should exit the process when the repository URL is not available (8 ms)
+    ✓ should exit the process when the repository URL is not available (10 ms)
     ✓ should handle axios errors and exit the process (1 ms)
   getNpmPackageInfo
-    ✓ should return package info when data is available (3 ms)
+    ✓ should return package info when data is available (1 ms)
     ✓ should handle missing fields and provide default values (1 ms)
-    ✓ should handle errors and return default package info
+    ✓ should handle errors and return default package info (1 ms)
+
+PASS test/auth.test.ts
+  Auth Middleware
+    ✓ should pass valid token
+    ✓ should handle missing token (3 ms)
+    ✓ should handle invalid token
+  AuthController
+    ✓ should authenticate valid credentials (1 ms)
+    ✓ should reject invalid request body
+
+PASS test/cli.test.ts
+  cli
+    ✓ should log error and exit if no file path is provided (1 ms)
+    ✓ should log error and exit if file cannot be read (1 ms)
+    ✓ should log error and exit if URL processing fails (1 ms)
+    ✓ should process URLs and log metrics (1 ms)
+
+PASS test/rampUpTime.test.ts
+  calculateRampUpTime
+    ✓ should return correct score when README and install instructions exist (3 ms)
+    ✓ should return 0 when no README exists (2 ms)
+  checkReadme
+    ✓ should return true if README file exists (1 ms)
+    ✓ should return false if README file does not exist (1 ms)
+  checkInstallationInstructions
+    ✓ should return true if installation instructions are found (1 ms)
+    ✓ should return false if no installation instructions are found (1 ms)
+  calculateCodeCommentRatio
+    ✓ should calculate the correct code-to-comment ratio for JavaScript (1 ms)
+    ✓ should calculate the correct code-to-comment ratio for Python (1 ms)
+    ✓ should calculate the correct code-to-comment ratio for Python multi-line comments (1 ms)
+    ✓ should calculate the correct code-to-comment ratio for Ruby
+    ✓ should calculate the correct code-to-comment ratio for Ruby multi-line comments
+    ✓ should return 0 if no comments are present in code files (2 ms)
+    ✓ should return 0 if no code files are found (2 ms)
+  getAllFiles
+    ✓ should retrieve all files from directory recursively (1 ms)
+    ✓ should handle empty directories (1 ms)
+    ✓ should skip symbolic links (2 ms)
 
   console.error
     Invalid URL - unable to extract package name.
@@ -197,8 +238,8 @@ PASS test/npmApiProcess.test.ts
 PASS test/urlUtils.test.ts
   urlUtils
     extractOwnerAndRepo
-      ✓ should extract owner and repo from a valid GitHub URL
-      ✓ should exit with return code 1 for invalid owner and repo (6 ms)
+      ✓ should extract owner and repo from a valid GitHub URL (1 ms)
+      ✓ should exit with return code 1 for invalid owner and repo (8 ms)
     checkUrlType
       ✓ should identify a GitHub URL (1 ms)
       ✓ should identify an npm URL
@@ -211,48 +252,25 @@ PASS test/urlUtils.test.ts
       ✓ should extract GitHub repo name from a valid GitHub URL (1 ms)
       ✓ should exit with rc1 for invalid URL (3 ms)
     processUrl
-      ✓ should process a GitHub URL and return owner and repo (1 ms)
-      ✓ should process an npm URL and return owner and repo
-      ✓ should return with rc1 for an invalid URL type (1 ms)
+      ✓ should process a GitHub URL and return owner and repo
+      ✓ should process an npm URL and return owner and repo (1 ms)
+      ✓ should return with rc1 for an invalid URL type
 
 PASS test/handleErrors.test.ts
   _handleError
-    ✓ should handle rate limit exceeded error (403) (9 ms)
-    ✓ should handle invalid or missing GitHUb Token error (401)
+    ✓ should handle rate limit exceeded error (403) (18 ms)
+    ✓ should handle invalid or missing GitHUb Token error (401) (1 ms)
     ✓ should handle invalid URL (404) (1 ms)
-    ✓ should handle between 400 and 500 (406) (3 ms)
+    ✓ should handle between 400 and 500 (406) (1 ms)
     ✓ should handle between 500 and 600 (506) (1 ms)
-    ✓ should handle unknown error
-
-PASS test/rampUpTime.test.ts
-  calculateRampUpTime
-    ✓ should return correct score when README and install instructions exist (2 ms)
-    ✓ should return 0 when no README exists (2 ms)
-  checkReadme
-    ✓ should return true if README file exists (1 ms)
-    ✓ should return false if README file does not exist (1 ms)
-  checkInstallationInstructions
-    ✓ should return true if installation instructions are found
-    ✓ should return false if no installation instructions are found (1 ms)
-  calculateCodeCommentRatio
-    ✓ should calculate the correct code-to-comment ratio for JavaScript (1 ms)
-    ✓ should calculate the correct code-to-comment ratio for Python (1 ms)
-    ✓ should calculate the correct code-to-comment ratio for Python multi-line comments (1 ms)
-    ✓ should calculate the correct code-to-comment ratio for Ruby
-    ✓ should calculate the correct code-to-comment ratio for Ruby multi-line comments (1 ms)
-    ✓ should return 0 if no comments are present in code files (1 ms)
-    ✓ should return 0 if no code files are found (1 ms)
-  getAllFiles
-    ✓ should retrieve all files from directory recursively (1 ms)
-    ✓ should handle empty directories (3 ms)
-    ✓ should skip symbolic links (1 ms)
+    ✓ should handle unknown error (1 ms)
 
 PASS test/clone_repo.test.ts
   cloneRepo
-    ✓ should clone a repository with a valid GitHub URL (1 ms)
-    ✓ should throw an error with an invalid GitHub URL (4 ms)
-    ✓ should throw an error with a malformed URL (1 ms)
-    ✓ should not create directory if repo path already exists (2 ms)
+    ✓ should clone a repository with a valid GitHub URL (2 ms)
+    ✓ should throw an error with an invalid GitHub URL (6 ms)
+    ✓ should throw an error with a malformed URL
+    ✓ should not create directory if repo path already exists (1 ms)
   removeRepo
     ✓ should remove the repository when the path is valid and exists (1 ms)
     ✓ should throw an error when the repository does not exist
@@ -267,83 +285,77 @@ PASS test/clone_repo.test.ts
 
 PASS test/licenseCompatibility.test.ts
   calculateLicenseCompatibility
-    ✓ should return 1 for simple MIT (3 ms)
+    ✓ should return 1 for simple MIT (1 ms)
     ✓ should return 1 for MIT with License suffix (1 ms)
     ✓ should return 1 for MIT with The prefix
     ✓ should return 1 for Apache with spaces (1 ms)
     ✓ should return 1 for Apache with hyphen (1 ms)
-    ✓ should return 0.9 for GPL v3 with hyphen
-    ✓ should return 0.9 for GPL v3 full name (1 ms)
-    ✓ should return 0.9 for GPL v2 with hyphen
-    ✓ should return 0.9 for GPL v2 full name (1 ms)
-    ✓ should return 1 for BSD 3-clause
-    ✓ should return 1 for BSD 2-clause (1 ms)
-    ✓ should return 0.9 for LGPL 2.1
-    ✓ should return 0.9 for LGPL 2.1 full name (1 ms)
-    ✓ should return 1 for Zlib license
-    ✓ should return 0 for unknown license (1 ms)
-    ✓ should return 0 for null license
+    ✓ should return 0.9 for GPL v3 with hyphen (1 ms)
+    ✓ should return 0.9 for GPL v3 full name
+    ✓ should return 0.9 for GPL v2 with hyphen (1 ms)
+    ✓ should return 0.9 for GPL v2 full name
+    ✓ should return 1 for BSD 3-clause (1 ms)
+    ✓ should return 1 for BSD 2-clause
+    ✓ should return 0.9 for LGPL 2.1 (1 ms)
+    ✓ should return 0.9 for LGPL 2.1 full name
+    ✓ should return 1 for Zlib license (1 ms)
+    ✓ should return 0 for unknown license
+    ✓ should return 0 for null license (3 ms)
     ✓ should handle case variations in license names
     ✓ should handle SPDX identifiers (1 ms)
 
-PASS test/packageDownloadService.test.ts
-  PackageDownloadService
-    getPackageById
-      ✓ should get package successfully (1 ms)
-      ✓ should throw error if package not found (3 ms)
-      ✓ should throw error if package content not found
-
-PASS test/costService.test.ts
-  CostService
-    calculatePackageCost
-      ✓ should calculate standalone cost correctly (1 ms)
-      ✓ should handle package not found (3 ms)
-      ✓ should calculate total cost with dependencies (1 ms)
-      ✓ should handle missing costs in version data
-      ✓ should handle unexpected errors (1 ms)
-
 PASS test/logger.test.ts
   Logger Module
-    ✓ should exit if LOG_FILE is not set (8 ms)
+    ✓ should exit if LOG_FILE is not set (9 ms)
     ✓ should exit if LOG_FILE does not exist (1 ms)
 
-PASS test/correctness.test.ts
-  calculateCorrectness with almost complete repository
-    ✓ should give a score >= 0.5 with a complete repo (2 ms)
-    ✓ should score <= 0.5 if src/ is empty
-    ✓ should score a 0 if src/ does not exist (1 ms)
-    ✓ should score a 0 if test/ does not exist
-    ✓ should handle CI/CD files correctly (3 ms)
+PASS test/fileUtils.test.ts
+  readUrlsFromFile
+    ✓ should read URLs from a file and return an array of URLs (1 ms)
+    ✓ should reject the promise if there is an error reading the file
+    ✓ should filter out empty lines from the file content
+    ✓ should return an empty array if the file contains only empty lines
+
+PASS test/cost.test.ts
+  CostController
+    getPackageCost
+      ✓ should return package cost successfully (1 ms)
+      ✓ should handle missing package ID (1 ms)
+      ✓ should handle package not found
+      ✓ should handle calculation errors (1 ms)
+      ✓ should handle unexpected errors
+      ✓ should consider includeDependencies query parameter
 
 PASS test/reviewPullReqs.test.ts
   Pull Request Review Metric
     ✓ should return 0 when no pull requests exist
-    ✓ should calculate correct score for PRs with no reviews
+    ✓ should calculate correct score for PRs with no reviews (1 ms)
     ✓ should calculate correct score for fully reviewed PRs
     ✓ should give bonus for having PR template
-    ✓ should handle mixed review scenarios
+    ✓ should handle mixed review scenarios (1 ms)
+
+PASS test/correctness.test.ts
+  calculateCorrectness with almost complete repository
+    ✓ should give a score >= 0.5 with a complete repo (3 ms)
+    ✓ should score <= 0.5 if src/ is empty
+    ✓ should score a 0 if src/ does not exist (1 ms)
+    ✓ should score a 0 if test/ does not exist
+    ✓ should handle CI/CD files correctly (1 ms)
 
 PASS test/busFactor.test.ts
   calculateBusFactor
     ✓ should calculate bus factor for multiple contributors (1 ms)
     ✓ should handle no contributors
-    ✓ should handle one contributor
+    ✓ should handle one contributor (1 ms)
     ✓ should handle one contributor but no commits
 
 PASS test/pinnedDependencies.test.ts
   Pinned Dependencies Metric
     ✓ should return 0 when no package.json exists (1 ms)
     ✓ should return 1 when no dependencies exist
-    ✓ should calculate correct score for mixed dependencies
+    ✓ should calculate correct score for mixed dependencies (1 ms)
     ✓ should give bonus for having package-lock.json
     ✓ should handle invalid package.json content
-
-PASS test/fileUtils.test.ts
-  readUrlsFromFile
-    ✓ should read URLs from a file and return an array of URLs (1 ms)
-    ✓ should reject the promise if there is an error reading the file
-    ✓ should filter out empty lines from the file content (1 ms)
-    ✓ should return an empty array if the file contains only empty lines
 
 PASS test/types.test.ts
   Types
@@ -390,9 +402,9 @@ FAIL test/netScore.test.ts
       at Object.<anonymous> (test/netScore.test.ts:147:31)
 
 
-Test Suites: 2 failed, 21 passed, 23 total
-Tests:       2 failed, 134 passed, 136 total
+Test Suites: 2 failed, 22 passed, 24 total
+Tests:       2 failed, 142 passed, 144 total
 Snapshots:   0 total
-Time:        3.822 s
+Time:        8.276 s
 Ran all test suites.
 Test results written to: test-results.json
