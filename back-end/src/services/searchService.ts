@@ -1,6 +1,7 @@
 // src/services/searchService.ts
 import { log } from '../logger';
 import type { PackageMetadata } from '../types';
+import { packageDynamoService } from './dynamoServices';
 
 export class SearchService {
     /**
@@ -8,7 +9,7 @@ export class SearchService {
      */
     static async listPackages(offset?: string): Promise<PackageMetadata[]> {
         try {
-            // Stub implementation
+            // Implementation will be added in package-read branch
             return [];
         } catch (error) {
             log.error('Error listing packages:', error);
@@ -17,27 +18,27 @@ export class SearchService {
     }
 
     /**
-     * Search packages by regex pattern
+     * Search packages by name (exact match)
      */
-    static async searchByRegEx(pattern: string): Promise<PackageMetadata[]> {
+    static async searchByName(name: string): Promise<PackageMetadata[]> {
         try {
-            // Stub implementation
+            // Implementation will be added in package-read branch
             return [];
         } catch (error) {
-            log.error('Error searching packages:', error);
+            log.error('Error searching packages by name:', error);
             throw error;
         }
     }
 
     /**
-     * Search packages by name
+     * Get package by ID
      */
-    static async searchByName(name: string): Promise<PackageMetadata[]> {
+    static async getPackageById(id: string): Promise<PackageMetadata | null> {
         try {
-            // Stub implementation
-            return [];
+            // Implementation will be added in package-read branch
+            return null;
         } catch (error) {
-            log.error('Error searching packages by name:', error);
+            log.error('Error getting package by ID:', error);
             throw error;
         }
     }
