@@ -28,23 +28,26 @@ export class UploadController {
                 : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat, userId);
 
             return res.status(201).json(result);
-        } catch (error) {
+        } catch (error: any) {
             log.error('Error in createPackage:', error);
 
             if (error instanceof Error) {
+                // Handle specific error messages with appropriate status codes
                 if (error.message.includes('already exists')) {
                     return res.status(409).json({ error: error.message });
                 }
                 
-                if (error.message.includes('failed quality requirements')) {
+                if (error.message.includes('quality requirements')) {
                     return res.status(424).json({ error: error.message });
                 }
 
-                if (error.message.includes('Invalid request')) {
-                    return res.status(400).json({ error: error.message });
+                if (error.message.includes('exceeds limit')) {
+                    return res.status(413).json({ error: error.message });
                 }
 
-                if (error.message.includes('Invalid URL')) {
+                if (error.message.includes('Invalid') || 
+                    error.message.includes('must') ||
+                    error.message.includes('Could not find')) {
                     return res.status(400).json({ error: error.message });
                 }
             }
