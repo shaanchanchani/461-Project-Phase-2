@@ -31,34 +31,32 @@ export class PackageUpdateService {
             throw new Error('Metadata must include Version, ID, and Name fields');
         }
 
-        // Validate that metadata.ID matches package ID
-        if (metadata.ID !== packageId) {
-            throw new Error('Package ID in metadata must match URL parameter');
+        // Get the latest version of the package
+        const latestPackage = await this.packageDynamoService.getLatestPackageByName(metadata.Name);
+        
+        // Check if package exists
+        if (!latestPackage) {
+            throw new Error('Package not found');
+        }
+
+        // Check authorization
+        if (latestPackage.user_id !== userId) {
+            throw new Error('Unauthorized to update this package');
+        }
+
+        // Validate package name matches
+        if (latestPackage.name !== metadata.Name) {
+            throw new Error('Package name cannot be changed during update');
+        }
+
+        // Verify version is newer than the latest version
+        if (!this.isNewerVersion(metadata.Version, latestPackage.latest_version)) {
+            throw new Error('New version must be greater than current version');
         }
 
         // Validate data (URL xor Content)
         if ((!data.URL && !data.Content) || (data.URL && data.Content)) {
             throw new Error('Must provide either URL or Content in data field, but not both');
-        }
-
-        // Check if package exists and user owns it
-        const existingPackage = await this.packageDynamoService.getRawPackageById(packageId);
-        if (!existingPackage) {
-            throw new Error('Package not found');
-        }
-
-        if (existingPackage.user_id !== userId) {
-            throw new Error('Unauthorized to update this package');
-        }
-
-        // Validate package name matches
-        if (existingPackage.name !== metadata.Name) {
-            throw new Error('Package name cannot be changed during update');
-        }
-
-        // Verify version is newer
-        if (!this.isNewerVersion(metadata.Version, existingPackage.latest_version)) {
-            throw new Error('New version must be greater than current version');
         }
 
         // Upload the package using the upload service
@@ -75,18 +73,17 @@ export class PackageUpdateService {
         // Update package metadata in DynamoDB
         try {
             await this.packageDynamoService.updatePackage({
-                package_id: packageId,
+                package_id: latestPackage.package_id, // Use the latest package ID
                 latest_version: metadata.Version,
-                name: metadata.Name, // Use the name from metadata to ensure consistency
-                description: existingPackage.description,
+                name: metadata.Name,
+                description: latestPackage.description,
                 user_id: userId,
-                created_at: existingPackage.created_at
+                created_at: latestPackage.created_at
             });
 
             return uploadResponse;
         } catch (error) {
             log.error('Failed to update package metadata:', error);
-            // TODO: Consider rolling back the upload if metadata update fails
             throw new Error('Failed to update package metadata in database');
         }
     }

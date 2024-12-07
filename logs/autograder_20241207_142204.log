@@ -1,19 +1,43 @@
-Starting run monitoring at Sat Dec  7 17:30:35 UTC 2024
+Starting Autograder run at Sat Dec  7 14:22:04 EST 2024
 ----------------------------------------
-Sat Dec  7 17:30:35 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:30:41 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:30:46 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:30:51 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:30:56 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:31:01 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:31:06 UTC 2024: Response: ["1","7"]
-Sat Dec  7 17:33:18 UTC 2024: Response: 
-----------------------------------------
-Run completed at Sat Dec  7 17:33:23 UTC 2024
-Final run details:
+Scheduling run...
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  2005  100  1925  100    80   7578    314 --:--:-- --:--:-- --:--:--  7893
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   122  100    42  100    80    159    303 --:--:-- --:--:-- --:--:--   463
+{"message":"Task scheduled successfully"}
+
+Monitoring run progress...
+----------------------------------------
+Sat Dec  7 14:22:04 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:09 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:14 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:19 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:24 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:30 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:35 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:40 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:45 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:50 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:22:55 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:23:00 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:23:05 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:23:10 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:23:16 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:23:21 EST 2024: ["1","2","23","7"]
+Sat Dec  7 14:23:26 EST 2024: ["1","2","7"]
+Sat Dec  7 14:23:31 EST 2024: ["1","2","7"]
+Sat Dec  7 14:23:36 EST 2024: ["1","2","7"]
+Sat Dec  7 14:23:41 EST 2024: ["1","2","7"]
+Sat Dec  7 14:23:46 EST 2024: ["1","7"]
+Sat Dec  7 14:23:51 EST 2024: ["1","7"]
+Sat Dec  7 14:23:56 EST 2024: ["1","7"]
+Sat Dec  7 14:24:01 EST 2024: ["1"]
+
+Run completed!
+----------------------------------------
+
+Fetching results...
+----------------------------------------
 {
     "Package Cost Test Group": {
         "Total": "2 / 3 (3 hidden)"
@@ -73,9 +97,11 @@ Final run details:
         "Upload Ingest package 3 via Ingest": 1,
         "Upload Ingest package 4 via Ingest": 1
     },
-    "autgrader_run_log": "data/7/run/phase2/autograder_07-12-17-31.log",
-    "end_time": "2024-12-07 17:32:33.740469",
-    "run_time": "80.328464 seconds",
-    "start_time": "2024-12-07 17:31:13.412005",
-    "system_run_log": "data/7/run/phase2/autograder_07-12-17-31.sysout.log"
+    "autgrader_run_log": "data/7/run/phase2/autograder_07-12-19-22.log",
+    "end_time": "2024-12-07 19:23:58.795520",
+    "run_time": "78.669159 seconds",
+    "start_time": "2024-12-07 19:22:40.126361",
+    "system_run_log": "data/7/run/phase2/autograder_07-12-19-22.sysout.log"
 }
+
+Parsing results...
