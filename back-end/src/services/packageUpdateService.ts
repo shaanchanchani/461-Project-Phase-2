@@ -31,10 +31,13 @@ export class PackageUpdateService {
             throw new Error('Metadata must include Version, ID, and Name fields');
         }
 
-        // Get the package by name
-        const existingPackage = await this.packageDynamoService.getPackageByName(metadata.Name);
-        
-        // Check if package exists
+        // Validate package ID matches metadata ID
+        if (metadata.ID !== packageId) {
+            throw new Error('Package ID in metadata must match URL parameter');
+        }
+
+        // Get the package by ID first
+        const existingPackage = await this.packageDynamoService.getRawPackageById(packageId);
         if (!existingPackage) {
             throw new Error('Package not found');
         }
@@ -49,54 +52,54 @@ export class PackageUpdateService {
             throw new Error('Package name cannot be changed during update');
         }
 
-        // Verify version is newer than the latest version
+        // Compare versions
         if (!this.isNewerVersion(metadata.Version, existingPackage.latest_version)) {
             throw new Error('New version must be greater than current version');
         }
 
-        // Validate data (URL xor Content)
-        if ((!data.URL && !data.Content) || (data.URL && data.Content)) {
-            throw new Error('Must provide either URL or Content in data field, but not both');
-        }
-
-        // Upload the package using the upload service
+        // Upload the new package version
         let uploadResponse;
         try {
-            uploadResponse = data.URL
-                ? await this.packageUploadService.uploadPackageFromUrl(data.URL, data.JSProgram, false, userId)
-                : await this.packageUploadService.uploadPackageFromZip(data.Content!, data.JSProgram, false, userId);
-        } catch (error) {
-            log.error('Failed to upload updated package:', error);
-            throw new Error('Failed to update package: Upload failed');
-        }
+            if (data.URL) {
+                uploadResponse = await this.packageUploadService.uploadPackageFromUrl(data.URL, data.JSProgram, false, userId);
+            } else if (data.Content) {
+                uploadResponse = await this.packageUploadService.uploadPackageFromZip(data.Content, data.JSProgram, false, userId);
+            } else {
+                throw new Error('Must provide either URL or Content');
+            }
 
-        // Update package metadata in DynamoDB
-        try {
+            if (!uploadResponse) {
+                throw new Error('Failed to update package: Upload failed');
+            }
+
+            // Update the package in DynamoDB
             await this.packageDynamoService.updatePackage({
-                package_id: existingPackage.package_id, // Use the existing package ID
-                latest_version: metadata.Version,
-                name: metadata.Name,
-                description: existingPackage.description,
-                user_id: userId,
-                created_at: existingPackage.created_at
+                ...existingPackage,
+                latest_version: metadata.Version
             });
 
             return uploadResponse;
-        } catch (error) {
-            log.error('Failed to update package metadata:', error);
-            throw new Error('Failed to update package metadata in database');
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                // Wrap upload errors in the expected format
+                if (error.message === 'Upload failed') {
+                    throw new Error('Failed to update package: Upload failed');
+                }
+                throw error;
+            }
+            throw new Error('Failed to update package: Unknown error');
         }
     }
 
     private isNewerVersion(newVersion: string, currentVersion: string): boolean {
-        const [newMajor, newMinor, newPatch] = newVersion.split('.').map(Number);
-        const [curMajor, curMinor, curPatch] = currentVersion.split('.').map(Number);
+        const newParts = newVersion.split('.').map(Number);
+        const currentParts = currentVersion.split('.').map(Number);
 
-        if (newMajor > curMajor) return true;
-        if (newMajor < curMajor) return false;
-        if (newMinor > curMinor) return true;
-        if (newMinor < curMinor) return false;
-        return newPatch > curPatch;
+        for (let i = 0; i < 3; i++) {
+            if (newParts[i] > currentParts[i]) return true;
+            if (newParts[i] < currentParts[i]) return false;
+        }
+        return false;
     }
 }
 

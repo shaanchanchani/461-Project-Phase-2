@@ -43,6 +43,10 @@ describe('PackageUpdateService', () => {
         jest.clearAllMocks();
         mockPackageDynamoService = new PackageDynamoService() as jest.Mocked<PackageDynamoService>;
         mockPackageUploadService = new PackageUploadService() as jest.Mocked<PackageUploadService>;
+        
+        // Mock getPackageByName to return mockExistingPackage
+        mockPackageDynamoService.getPackageByName = jest.fn().mockResolvedValue(mockExistingPackage);
+        
         packageUpdateService = new PackageUpdateService(
             mockPackageDynamoService,
             mockPackageUploadService
