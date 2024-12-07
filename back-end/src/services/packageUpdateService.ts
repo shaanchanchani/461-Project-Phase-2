@@ -17,7 +17,7 @@ export class PackageUpdateService {
 
     public async updatePackage(
         packageId: string,
-        metadata: { Version: string; ID: string },
+        metadata: { Version: string; ID: string; Name: string },
         data: { URL?: string; Content?: string; JSProgram?: string },
         userId: string
     ) {
@@ -27,8 +27,8 @@ export class PackageUpdateService {
         }
 
         // Validate metadata
-        if (!metadata.Version || !metadata.ID) {
-            throw new Error('Metadata must include Version and ID fields');
+        if (!metadata.Version || !metadata.ID || !metadata.Name) {
+            throw new Error('Metadata must include Version, ID, and Name fields');
         }
 
         // Validate that metadata.ID matches package ID
@@ -49,6 +49,11 @@ export class PackageUpdateService {
 
         if (existingPackage.user_id !== userId) {
             throw new Error('Unauthorized to update this package');
+        }
+
+        // Validate package name matches
+        if (existingPackage.name !== metadata.Name) {
+            throw new Error('Package name cannot be changed during update');
         }
 
         // Verify version is newer
@@ -72,7 +77,7 @@ export class PackageUpdateService {
             await this.packageDynamoService.updatePackage({
                 package_id: packageId,
                 latest_version: metadata.Version,
-                name: uploadResponse.metadata.Name,
+                name: metadata.Name, // Use the name from metadata to ensure consistency
                 description: existingPackage.description,
                 user_id: userId,
                 created_at: existingPackage.created_at
@@ -81,6 +86,7 @@ export class PackageUpdateService {
             return uploadResponse;
         } catch (error) {
             log.error('Failed to update package metadata:', error);
+            // TODO: Consider rolling back the upload if metadata update fails
             throw new Error('Failed to update package metadata in database');
         }
     }
