@@ -1,6 +1,7 @@
 // src/controllers/searchController.ts
 import { Request, Response } from 'express';
 import { SearchService } from '../services/searchService';
+import { RegexService } from '../services/regexService';
 import { log } from '../logger';
 
 export class SearchController {
@@ -34,7 +35,7 @@ export class SearchController {
     static async searchByRegEx(req: Request, res: Response) {
         try {
             const { RegEx } = req.body;
-            const packages = await SearchService.searchByRegEx(RegEx);
+            const packages = await RegexService.searchByRegEx(RegEx);
             res.status(200).json(packages);
         } catch (error) {
             log.error('Error searching packages:', error);
