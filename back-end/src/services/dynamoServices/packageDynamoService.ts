@@ -199,6 +199,32 @@ export class PackageDynamoService extends BaseDynamoService {
         }
     }
 
+    /**
+     * Update an existing package's metadata
+     */
+    public async updatePackage(packageData: PackageTableItem): Promise<void> {
+        try {
+            await this.docClient.send(new UpdateCommand({
+                TableName: PACKAGES_TABLE,
+                Key: {
+                    package_id: packageData.package_id
+                },
+                UpdateExpression: 'SET #name = :name, latest_version = :version, description = :description',
+                ExpressionAttributeNames: {
+                    '#name': 'name'
+                },
+                ExpressionAttributeValues: {
+                    ':name': packageData.name,
+                    ':version': packageData.latest_version,
+                    ':description': packageData.description
+                }
+            }));
+        } catch (error) {
+            log.error('Error updating package:', error);
+            throw error;
+        }
+    }
+
     protected extractKeyFromItem(tableName: string, item: Record<string, any>): Record<string, any> {
         switch (tableName) {
             case PACKAGES_TABLE:

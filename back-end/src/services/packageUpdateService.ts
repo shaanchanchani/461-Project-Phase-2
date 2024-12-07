@@ -57,9 +57,32 @@ export class PackageUpdateService {
         }
 
         // Upload the package using the upload service
-        return data.URL
-            ? await this.packageUploadService.uploadPackageFromUrl(data.URL, data.JSProgram, false, userId)
-            : await this.packageUploadService.uploadPackageFromZip(data.Content!, data.JSProgram, false, userId);
+        let uploadResponse;
+        try {
+            uploadResponse = data.URL
+                ? await this.packageUploadService.uploadPackageFromUrl(data.URL, data.JSProgram, false, userId)
+                : await this.packageUploadService.uploadPackageFromZip(data.Content!, data.JSProgram, false, userId);
+        } catch (error) {
+            log.error('Failed to upload updated package:', error);
+            throw new Error('Failed to update package: Upload failed');
+        }
+
+        // Update package metadata in DynamoDB
+        try {
+            await this.packageDynamoService.updatePackage({
+                package_id: packageId,
+                latest_version: metadata.Version,
+                name: uploadResponse.metadata.Name,
+                description: existingPackage.description,
+                user_id: userId,
+                created_at: existingPackage.created_at
+            });
+
+            return uploadResponse;
+        } catch (error) {
+            log.error('Failed to update package metadata:', error);
+            throw new Error('Failed to update package metadata in database');
+        }
     }
 
     private isNewerVersion(newVersion: string, currentVersion: string): boolean {
