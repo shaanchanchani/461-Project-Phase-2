@@ -36,8 +36,10 @@ export class PackageUpdateService {
             throw new Error('Package ID in metadata must match URL parameter');
         }
 
-        // Get the package by ID first
-        const existingPackage = await this.packageDynamoService.getRawPackageById(packageId);
+        // Get the package by name
+        const existingPackage = await this.packageDynamoService.getPackageByName(metadata.Name);
+        
+        // Check if package exists
         if (!existingPackage) {
             throw new Error('Package not found');
         }
