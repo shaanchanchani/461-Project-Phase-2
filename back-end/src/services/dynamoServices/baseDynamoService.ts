@@ -138,44 +138,58 @@ export class BaseDynamoService {
             ];
 
             for (const tableName of tables) {
-                // Get all items from the table
-                const scanCommand = new ScanCommand({
-                    TableName: tableName
-                });
+                try {
+                    // Get all items from the table
+                    const scanCommand = new ScanCommand({
+                        TableName: tableName
+                    });
 
-                const items = await this.baseClient.send(scanCommand);
-                
-                if (items.Items && items.Items.length > 0) {
-                    // Delete items in batches of 25 (DynamoDB limit)
-                    const batches = [];
-                    for (let i = 0; i < items.Items.length; i += 25) {
-                        const batchItems = items.Items.slice(i, i + 25);
-                        const deleteRequests = batchItems.map(item => {
-                            try {
-                                const key = this.extractKeyFromItem(tableName, item);
-                                return {
-                                    DeleteRequest: { Key: key }
-                                };
-                            } catch (error) {
-                                log.error(`Error extracting key for table ${tableName}:`, error);
-                                return undefined;
+                    const items = await this.baseClient.send(scanCommand);
+                    
+                    if (items.Items && items.Items.length > 0) {
+                        // Delete items in batches of 25 (DynamoDB limit)
+                        const batches = [];
+                        for (let i = 0; i < items.Items.length; i += 25) {
+                            const batchItems = items.Items.slice(i, i + 25);
+                            const deleteRequests = batchItems.map(item => {
+                                try {
+                                    const key = this.extractKeyFromItem(tableName, item);
+                                    // Only include delete request if we got a valid key
+                                    if (key && Object.keys(key).length > 0) {
+                                        return {
+                                            DeleteRequest: { Key: key }
+                                        };
+                                    }
+                                    return null;
+                                } catch (error) {
+                                    log.warn(`Error extracting key for item in ${tableName}, skipping item`);
+                                    return null;
+                                }
+                            }).filter(request => request !== null);
+
+                            if (deleteRequests.length > 0) {
+                                const batchWriteCommand = new BatchWriteItemCommand({
+                                    RequestItems: {
+                                        [tableName]: deleteRequests
+                                    }
+                                });
+                                batches.push(this.baseClient.send(batchWriteCommand));
                             }
-                        }).filter(request => request !== undefined);
+                        }
 
-                        if (deleteRequests.length === 0) continue;
-
-                        const batchWriteCommand = new BatchWriteItemCommand({
-                            RequestItems: {
-                                [tableName]: deleteRequests
-                            }
-                        });
-
-                        batches.push(this.baseClient.send(batchWriteCommand));
+                        if (batches.length > 0) {
+                            await Promise.all(batches);
+                            log.info(`Cleared ${items.Items.length} items from ${tableName}`);
+                        }
+                    } else {
+                        log.info(`Table ${tableName} is already empty`);
                     }
-
-                    if (batches.length > 0) {
-                        await Promise.all(batches);
+                } catch (error: any) {
+                    if (error.name === 'ResourceNotFoundException') {
+                        log.info(`Table ${tableName} does not exist, skipping`);
+                        continue;
                     }
+                    throw error;
                 }
             }
 
