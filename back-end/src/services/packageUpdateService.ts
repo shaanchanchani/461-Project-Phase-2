@@ -31,26 +31,26 @@ export class PackageUpdateService {
             throw new Error('Metadata must include Version, ID, and Name fields');
         }
 
-        // Get the latest version of the package
-        const latestPackage = await this.packageDynamoService.getLatestPackageByName(metadata.Name);
+        // Get the package by name
+        const existingPackage = await this.packageDynamoService.getPackageByName(metadata.Name);
         
         // Check if package exists
-        if (!latestPackage) {
+        if (!existingPackage) {
             throw new Error('Package not found');
         }
 
         // Check authorization
-        if (latestPackage.user_id !== userId) {
+        if (existingPackage.user_id !== userId) {
             throw new Error('Unauthorized to update this package');
         }
 
         // Validate package name matches
-        if (latestPackage.name !== metadata.Name) {
+        if (existingPackage.name !== metadata.Name) {
             throw new Error('Package name cannot be changed during update');
         }
 
         // Verify version is newer than the latest version
-        if (!this.isNewerVersion(metadata.Version, latestPackage.latest_version)) {
+        if (!this.isNewerVersion(metadata.Version, existingPackage.latest_version)) {
             throw new Error('New version must be greater than current version');
         }
 
@@ -73,12 +73,12 @@ export class PackageUpdateService {
         // Update package metadata in DynamoDB
         try {
             await this.packageDynamoService.updatePackage({
-                package_id: latestPackage.package_id, // Use the latest package ID
+                package_id: existingPackage.package_id, // Use the existing package ID
                 latest_version: metadata.Version,
                 name: metadata.Name,
-                description: latestPackage.description,
+                description: existingPackage.description,
                 user_id: userId,
-                created_at: latestPackage.created_at
+                created_at: existingPackage.created_at
             });
 
             return uploadResponse;
