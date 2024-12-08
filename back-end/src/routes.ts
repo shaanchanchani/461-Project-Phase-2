@@ -7,7 +7,7 @@ import { costController } from './controllers/costController';
 import { uploadController } from './controllers/uploadController';
 import { ratingController } from './controllers/ratingController';
 import {downloadController} from './controllers/downloadController'
-import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
+// import { AuthController, authMiddleware, AuthenticatedRequest } from './middleware/auth';
 import { log } from './logger';
 import { updateController } from './controllers/updateController';
 import { trackController } from './controllers/trackController';
@@ -29,32 +29,33 @@ router.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Authentication endpoint (doesn't require auth middleware)
-router.put('/authenticate', asyncHandler(async (req: Request, res: Response) => {
-    log.info('=== Authentication Request ===');
-    log.info('Headers:', req.headers);
-    log.info('Body:', req.body);
-    await AuthController.authenticate(req, res);
-}));
+// router.put('/authenticate', asyncHandler(async (req: Request, res: Response) => {
+//     log.info('=== Authentication Request ===');
+//     log.info('Headers:', req.headers);
+//     log.info('Body:', req.body);
+//     await AuthController.authenticate(req, res);
+// }));
 
-// Tracks endpoint (doesn't require auth middleware)
+// Tracks endpoint
 router.get('/tracks', asyncHandler(async (req: Request, res: Response) => {
     log.info('=== Tracks Request ===');
     log.info('Headers:', req.headers);
     await trackController.getTrack(req, res);
 }));
 
-// All other endpoints require authentication
-router.use(authMiddleware);
+// All other endpoints (no auth required now)
+// router.use(authMiddleware);
 
 // Package Search and List Endpoints
-// router.post('/packages', asyncHandler(packageController.listPackages));
-// router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
+router.post('/packages', asyncHandler(SearchController.listPackages));
+router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
 
 // Package Retrieval Endpoints
 router.get('/package/:id', asyncHandler(downloadController.getPackageById));
+router.get('/package/:id/download', asyncHandler(downloadController.getPackageById));
 
 // Package Update Endpoint
-router.put('/package/:id', asyncHandler(updateController.updatePackage));
+router.post('/package/:id', asyncHandler(updateController.updatePackage));
 
 // Package Rating Endpoints
 router.get('/package/:id/rate', asyncHandler(ratingController.ratePackage));

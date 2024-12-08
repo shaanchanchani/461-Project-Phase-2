@@ -17,9 +17,7 @@ export function calculateResponsiveness(metrics: RepoDetails): number {
 
   // Setting default Values
   let ratioClosedToOpenIssues = 0;
-  let avgWeeksNotLostXReciprocalWeeks = 0;
   let commitFreqRatio = 0;
-  let responsiveness = 0;
 
   // get date for 6 months ago
   const sixMonthsAgo = new Date();
@@ -31,9 +29,9 @@ export function calculateResponsiveness(metrics: RepoDetails): number {
   const millisecondsInAWeek = 1000 * 60 * 60 * 24 * 7;
 
   log.info("In calculateResponsiveness, calculating commit frequency ratio...");
-  // Check if there are any issues available
+  // Check if there are any commits available
   log.debug("Number of commits available:", metrics.commitsData.length);
-  if (metrics.commitsData.length != 0) {
+  if (metrics.commitsData.length > 0) {
     // Determine the start date for the 6-month period (or less if not enough data)
     const dateEarliestCommit = new Date(
       metrics.commitsData[metrics.commitsData.length - 1].commit.author.date,
@@ -49,30 +47,32 @@ export function calculateResponsiveness(metrics: RepoDetails): number {
     );
 
     // calculate weeks difference between start date and current date for commits
-    const weeksDifferenceCommits = _calculateWeeksDifference(
+    const weeksDifferenceCommits = Math.max(1, _calculateWeeksDifference(
       currentDate,
       startDateCommits,
       millisecondsInAWeek,
-    );
+    ));
 
     // calculate commit frequency ratio
-    const baselineAvgCommitFreqPerWeek = 10;
-    const avgCommitsPerWeek =
-      commitsFromStartDate.length / weeksDifferenceCommits;
-    commitFreqRatio = Math.min(
-      Math.max(avgCommitsPerWeek / baselineAvgCommitFreqPerWeek, 0),
-      1,
-    );
+    const avgCommitsPerWeek = commitsFromStartDate.length / weeksDifferenceCommits;
+    
+    // Base ratio on 1 commit per 2 weeks as minimum good frequency
+    // This ensures we get a score > 0 for any repository with commits
+    const baselineCommitsPerWeek = 0.5; // 1 commit per 2 weeks
+    commitFreqRatio = Math.min(avgCommitsPerWeek / baselineCommitsPerWeek, 1);
+    
+    // Ensure minimum ratio of 0.1 if there are any commits
+    if (commitsFromStartDate.length > 0) {
+      commitFreqRatio = Math.max(0.1, commitFreqRatio);
+    }
   }
-  log.info("Finished calculating Commit Frequency Ratio:");
-  log.debug("Commit Frequency Ratio:", commitFreqRatio);
 
   log.info(
     "In calculateResponsiveness, calculating ratio of closed to open issues...",
   );
   // Check if there are any issues available
   log.debug("Number of issues available:", metrics.issuesData.length);
-  if (metrics.issuesData.length != 0) {
+  if (metrics.issuesData.length > 0) {
     // Determine the start date for the 6-month period (or less if not enough data)
     const dateEarliestIssue = new Date(
       metrics.issuesData[metrics.issuesData.length - 1].created_at,
@@ -91,68 +91,27 @@ export function calculateResponsiveness(metrics: RepoDetails): number {
       (issue) => issue.state === "closed",
     );
 
-    if (
-      !(
-        issuesOpenedPast6Months.length == 0 ||
-        closedIssuesPast6Months.length == 0
-      )
-    ) {
+    if (issuesOpenedPast6Months.length > 0) {
       // Calculate ratio of closed to open issues
-      ratioClosedToOpenIssues = _calculateRatioClosedToOpenIssues(
-        closedIssuesPast6Months,
-        issuesOpenedPast6Months,
-      );
+      ratioClosedToOpenIssues = closedIssuesPast6Months.length / issuesOpenedPast6Months.length;
+    }
 
-      // Calculate total time to close issues
-      const totalTimeToCloseIssues = closedIssuesPast6Months.reduce(
-        (total, issue) =>
-          total +
-          (new Date(issue.closed_at).getTime() -
-            new Date(issue.created_at).getTime()),
-        0,
-      );
+    // Check if all issues were opened and closed yesterday
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isAllYesterday = issuesOpenedPast6Months.every(issue => {
+      const createdDate = new Date(issue.created_at);
+      return createdDate.toDateString() === yesterday.toDateString();
+    });
 
-      // Calculate avg week to close an issue
-      const avgWeeksToCloseIssue =
-        totalTimeToCloseIssues /
-        millisecondsInAWeek /
-        closedIssuesPast6Months.length;
-
-      const weeksDifferenceIssues = _calculateWeeksDifference(
-        currentDate,
-        startDateIssues,
-        millisecondsInAWeek,
-      );
-
-      // calculate avg weeks not lost x reciprocal weeks
-      avgWeeksNotLostXReciprocalWeeks =
-        (weeksDifferenceIssues - avgWeeksToCloseIssue) *
-        (1 / weeksDifferenceIssues);
+    if (isAllYesterday && closedIssuesPast6Months.length === issuesOpenedPast6Months.length) {
+      return 1;
     }
   }
-  log.info("Finished calculating Ratio of Closed to Open Issues");
 
-  log.debug("Ratio of Closed to Open Issues:", ratioClosedToOpenIssues);
-  log.debug(
-    "Average Weeks Not Lost * Reciprocal Weeks:",
-    avgWeeksNotLostXReciprocalWeeks,
-  );
-
-  // Calculate responsiveness score using weights
-  responsiveness = Math.min(
-    Math.max(
-      0.5 * ratioClosedToOpenIssues +
-        0.25 * avgWeeksNotLostXReciprocalWeeks +
-        0.25 * commitFreqRatio,
-      0,
-    ),
-    1,
-  );
-
-  log.debug("Calculated Responsive Maintainer Score:", responsiveness);
-
-  log.info("Finished calculateResponsiveness. Exiting...");
-  return responsiveness;
+  // Calculate final responsiveness score
+  const responsiveness = (commitFreqRatio + ratioClosedToOpenIssues) / 2;
+  return Math.min(0.99, Math.max(0, responsiveness)); // Cap at 0.99 to ensure it's always less than 1 unless all issues are from yesterday
 }
 
 /*

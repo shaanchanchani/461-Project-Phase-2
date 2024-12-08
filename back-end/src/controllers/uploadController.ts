@@ -23,6 +23,7 @@ export class UploadController {
                 return res.status(400).json({ error: 'Cannot provide both URL and Content' });
             }
 
+            // Upload package
             const result = url 
                 ? await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat, userId)
                 : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat, userId);
@@ -52,7 +53,7 @@ export class UploadController {
                 }
             }
 
-            return res.status(500).json({ error: 'Internal server error' });
+            return res.status(500).json({ error: 'Failed to create package' });
         }
     };
 }

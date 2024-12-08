@@ -73,6 +73,7 @@ export interface PackageVersionTableItem {
     version_id: string;
     package_id: string;
     version: string;
+    name : string;
     zip_file_path: string;
     debloated: boolean;
     created_at: string;
@@ -128,6 +129,23 @@ export interface Package {
     data: PackageData;
 }
 
+// Package Update Types
+export interface PackageUpdateMetadata {
+    Name: PackageName;
+    Version: string;
+    ID: PackageID;
+}
+
+export interface PackageUpdateData {
+    Content?: string;
+    URL?: string;
+}
+
+export interface PackageUpdate {
+    metadata: PackageUpdateMetadata;
+    data: PackageUpdateData;
+}
+
 // Processed Package Type
 export interface ProcessedPackage {
     url: string;
@@ -146,8 +164,8 @@ export interface ProcessedPackage {
 
 // Search and Query Types
 export interface PackageQuery {
+    Name: string;
     Version?: string;
-    Name: PackageName;
 }
 
 export interface PackageRegEx {

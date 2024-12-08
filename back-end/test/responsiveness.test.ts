@@ -34,6 +34,14 @@ describe("calculateResponsiveness", () => {
   });
 
   it("should calculate commit frequency ratio correctly", () => {
+    const today = new Date();
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(today.getDate() - 2);
+    const oneDayAgo = new Date(today);
+    oneDayAgo.setDate(today.getDate() - 1);
+    const threeDaysAgo = new Date(today);
+    threeDaysAgo.setDate(today.getDate() - 3);
+
     const metrics: RepoDetails = {
       owner: "testOwner",
       repo: "testRepo",
@@ -43,9 +51,9 @@ describe("calculateResponsiveness", () => {
       forks: 0,
       license: "MIT",
       commitsData: [
-        { commit: { author: { date: "2024-06-03T00:00:00Z" } } },
-        { commit: { author: { date: "2024-06-02T00:00:00Z" } } },
-        { commit: { author: { date: "2024-06-01T00:00:00Z" } } },
+        { commit: { author: { date: oneDayAgo.toISOString() } } },
+        { commit: { author: { date: twoDaysAgo.toISOString() } } },
+        { commit: { author: { date: threeDaysAgo.toISOString() } } },
       ],
       issuesData: [],
       contributorsData: [],

@@ -1,4 +1,4 @@
-import { QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { QueryCommand, UpdateCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { BaseDynamoService } from "./baseDynamoService";
 import { Package, PackageID, PackageTableItem, PackageVersionTableItem } from "../../types";
 import { log } from "../../logger";
@@ -178,23 +178,139 @@ export class PackageDynamoService extends BaseDynamoService {
     }
 
     /**
-     * Update package's latest version
+     * Update package's latest version and package ID
      */
-    public async updatePackageLatestVersion(packageId: string, version: string): Promise<void> {
+    public async updatePackageLatestVersion(packageId: string, version: string, newPackageId: string): Promise<void> {
         try {
             await this.docClient.send(new UpdateCommand({
                 TableName: PACKAGES_TABLE,
                 Key: {
                     name: packageId
                 },
-                UpdateExpression: 'SET latest_version = :version',
+                UpdateExpression: 'SET latest_version = :version, package_id = :newPackageId',
                 ExpressionAttributeValues: {
-                    ':version': version
+                    ':version': version,
+                    ':newPackageId': newPackageId
                 }
             }));
-            log.info(`Updated latest version to ${version} for package ${packageId}`);
         } catch (error) {
             log.error('Error updating package latest version:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update an existing package's metadata
+     */
+    public async updatePackage(packageData: PackageTableItem): Promise<void> {
+        try {
+            await this.docClient.send(new UpdateCommand({
+                TableName: PACKAGES_TABLE,
+                Key: {
+                    package_id: packageData.package_id
+                },
+                UpdateExpression: 'SET #name = :name, latest_version = :version, description = :description',
+                ExpressionAttributeNames: {
+                    '#name': 'name'
+                },
+                ExpressionAttributeValues: {
+                    ':name': packageData.name,
+                    ':version': packageData.latest_version,
+                    ':description': packageData.description
+                }
+            }));
+        } catch (error) {
+            log.error('Error updating package:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all packages with optional pagination
+     */
+    async getAllPackages(offset?: string): Promise<PackageTableItem[]> {
+        try {
+            const params: any = {
+                TableName: PACKAGES_TABLE,
+                Limit: 10
+            };
+
+            if (offset) {
+                params.ExclusiveStartKey = { name: offset };
+            }
+
+            const result = await this.docClient.send(new ScanCommand(params));
+            return result.Items as PackageTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting all packages:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all packages with a specific name
+     */
+    async getAllPackagesByName(name: string): Promise<PackageTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGES_TABLE,
+                KeyConditionExpression: '#name = :name',
+                ExpressionAttributeNames: {
+                    '#name': 'name'
+                },
+                ExpressionAttributeValues: {
+                    ':name': name
+                }
+            }));
+
+            return result.Items as PackageTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting packages by name:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all versions by package name using name-index
+     */
+    async getAllVersionsByName(name: string): Promise<PackageVersionTableItem[]> {
+        try {
+            const result = await this.docClient.send(new QueryCommand({
+                TableName: PACKAGE_VERSIONS_TABLE,
+                IndexName: 'name-index',
+                KeyConditionExpression: '#name = :name',
+                ExpressionAttributeNames: {
+                    '#name': 'name'
+                },
+                ExpressionAttributeValues: {
+                    ':name': name
+                }
+            }));
+
+            return result.Items as PackageVersionTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting versions by name:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all package versions with optional pagination
+     */
+    async getAllPackageVersions(offset?: string): Promise<PackageVersionTableItem[]> {
+        try {
+            const params: any = {
+                TableName: PACKAGE_VERSIONS_TABLE
+            };
+
+            if (offset) {
+                params.ExclusiveStartKey = JSON.parse(offset);
+            }
+
+            const result = await this.docClient.send(new ScanCommand(params));
+            return result.Items as PackageVersionTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting all package versions:', error);
             throw error;
         }
     }

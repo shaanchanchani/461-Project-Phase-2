@@ -14,16 +14,6 @@ export class RatingController {
     public ratePackage = async (req: Request, res: Response) => {
         try {
             const { id } = req.params;
-            // Set a default user ID since auth is optional
-            const userId = 'admin';
-
-            // Validate PackageID format
-            if (!id || !id.match(/^[a-zA-Z0-9\-]+$/)) {
-                return res.status(400).json({ 
-                    error: 'Bad Request',
-                    message: 'Invalid package ID format' 
-                });
-            }
 
             const rating = await this.ratingService.calculateRating(id);
             return res.status(200).json(rating);
@@ -38,17 +28,25 @@ export class RatingController {
                     });
                 }
                 
-                if (error.message.includes('Invalid package ID')) {
+                if (error.message.includes('Invalid package ID format')) {
                     return res.status(400).json({ 
                         error: 'Bad Request',
                         message: 'Invalid package ID format' 
                     });
                 }
+
+                if (error.message.includes('Metrics not found')) {
+                    return res.status(404).json({ 
+                        error: 'Not Found',
+                        message: 'Package metrics not found' 
+                    });
+                }
             }
             
+            // Default error response for unexpected errors
             return res.status(500).json({ 
                 error: 'Internal Server Error',
-                message: 'The package rating system failed to compute one or more metrics'
+                message: 'An unexpected error occurred while calculating package rating'
             });
         }
     }

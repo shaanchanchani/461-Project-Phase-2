@@ -1,0 +1,97 @@
+Starting Autograder run at Sat Dec  7 15:21:21 EST 2024
+----------------------------------------
+Scheduling run...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   122  100    42  100    80    163    312 --:--:-- --:--:-- --:--:--   476
+{"message":"Task scheduled successfully"}
+
+Monitoring run progress...
+----------------------------------------
+Sat Dec  7 15:21:21 EST 2024: ["1","23","7"]
+Sat Dec  7 15:21:26 EST 2024: ["1","7"]
+Sat Dec  7 15:21:31 EST 2024: ["1","7"]
+Sat Dec  7 15:21:37 EST 2024: ["1","7"]
+Sat Dec  7 15:21:42 EST 2024: ["1","7"]
+Sat Dec  7 15:21:47 EST 2024: ["1","7"]
+Sat Dec  7 15:21:52 EST 2024: ["1","7"]
+Sat Dec  7 15:21:57 EST 2024: ["1","7"]
+Sat Dec  7 15:22:02 EST 2024: ["1","7"]
+Sat Dec  7 15:22:07 EST 2024: ["1","7"]
+Sat Dec  7 15:22:12 EST 2024: ["1","7"]
+Sat Dec  7 15:22:17 EST 2024: ["1","7"]
+Sat Dec  7 15:22:23 EST 2024: ["1","7"]
+Sat Dec  7 15:22:28 EST 2024: ["1"]
+
+Run completed!
+----------------------------------------
+
+Fetching results...
+----------------------------------------
+{
+    "Package Cost Test Group": {
+        "Total": "1 / 3 (3 hidden)"
+    },
+    "Package Read Test Group": {
+        "Get Package By ID Test Package 0": 0,
+        "Get Package By ID Test Package 1": 0,
+        "Get Package By ID Test Package 2": 0,
+        "Get Package By ID Test Package 3": 0,
+        "Get Package By ID Test Package 4": 0,
+        "Get Package By ID Test Package 5": 0,
+        "Get Package By ID Test Package 6": 0,
+        "Get Package By Name Test Package 0": 0,
+        "Get Package By Name Test Package 1": 0,
+        "Get Package By Name Test Package 2": 0,
+        "Get Package By Name Test Package 3": 0,
+        "Get Package By Name Test Package 4": 0,
+        "Get Package By Name Test Package 5": 0,
+        "Get Package By Name Test Package 6": 0,
+        "Invalid Package Read Test": 1,
+        "Total": "1 / 15 "
+    },
+    "Rate packages Test Group": {
+        "Get Package Rate Test Package 0": 0,
+        "Get Package Rate Test Package 1": 0,
+        "Get Package Rate Test Package 2": 0,
+        "Get Package Rate Test Package 3": 0,
+        "Get Package Rate Test Package 4": 0,
+        "Get Package Rate Test Package 5": 0,
+        "Get Package Rate Test Package 6": 0,
+        "Total": "1 / 22 (1 hidden)"
+    },
+    "Regex Tests Group": {
+        "Exact Match Name Regex Test": 0,
+        "Extra Chars Name Regex Test": 0,
+        "Random String Regex Test": 1,
+        "Total": "1 / 6 (3 hidden)"
+    },
+    "Setup and Reset Test Group": {
+        "Check No Packages after Reset": 0,
+        "System Reset Test": 0,
+        "System Tracks Test": 0,
+        "Total": "0 / 5 "
+    },
+    "Total": "5 / 69 ",
+    "Update Package Test Group": {
+        "Total": "1 / 9 (9 hidden)"
+    },
+    "Upload Packages Test Group": {
+        "Get Package Query Test": 0,
+        "Total": "0 / 9 ",
+        "Upload Content package 1 via Content": 0,
+        "Upload Content package 2 via Content": 0,
+        "Upload Content package 3 via Content": 0,
+        "Upload Ingest package 1 via Ingest": 0,
+        "Upload Ingest package 2 via Ingest": 0,
+        "Upload Ingest package 3 via Ingest": 0,
+        "Upload Ingest package 4 via Ingest": 0
+    },
+    "autgrader_run_log": "data/7/run/phase2/autograder_07-12-20-21.log",
+    "end_time": "2024-12-07 20:22:24.137770",
+    "run_time": "30.556653 seconds",
+    "start_time": "2024-12-07 20:21:53.581117",
+    "system_run_log": "data/7/run/phase2/autograder_07-12-20-21.sysout.log"
+}
+
+Parsing results...

@@ -178,11 +178,27 @@ async function createVersionsTable() {
             TableName: PACKAGE_VERSIONS_TABLE,
             AttributeDefinitions: [
                 { AttributeName: 'package_id', AttributeType: 'S' },
-                { AttributeName: 'version', AttributeType: 'S' }
+                { AttributeName: 'version', AttributeType: 'S' },
+                { AttributeName: 'name', AttributeType: 'S' }
             ],
             KeySchema: [
                 { AttributeName: 'package_id', KeyType: 'HASH' },
                 { AttributeName: 'version', KeyType: 'RANGE' }
+            ],
+            GlobalSecondaryIndexes: [
+                {
+                    IndexName: 'name-index',
+                    KeySchema: [
+                        { AttributeName: 'name', KeyType: 'HASH' }
+                    ],
+                    Projection: {
+                        ProjectionType: 'ALL'
+                    },
+                    ProvisionedThroughput: {
+                        ReadCapacityUnits: 5,
+                        WriteCapacityUnits: 5
+                    }
+                }
             ],
             ProvisionedThroughput: {
                 ReadCapacityUnits: 5,
