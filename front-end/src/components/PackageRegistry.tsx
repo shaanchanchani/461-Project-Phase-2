@@ -54,6 +54,7 @@ const PackageRegistry: React.FC = () => {
   });
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [hasBrowsed, setHasBrowsed] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
 
   const fetchPackages = async () => {
     setLoading(true);
@@ -314,6 +315,50 @@ const PackageRegistry: React.FC = () => {
     }
   };
 
+  const handleSearch = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:3000/package/byRegEx', {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ RegEx: searchQuery })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to search packages');
+      }
+
+      const data = await response.json();
+      // Transform the response to match PackageData interface
+      const transformedData = data.map((pkg: any) => ({
+        metadata: {
+          Name: pkg.Name || pkg.metadata?.Name,
+          Version: pkg.Version || pkg.metadata?.Version,
+          ID: pkg.ID || pkg.metadata?.ID
+        },
+        data: {
+          URL: pkg.URL || pkg.data?.URL,
+          Content: pkg.Content || pkg.data?.Content,
+          JSProgram: pkg.JSProgram || pkg.data?.JSProgram,
+          debloat: pkg.debloat || pkg.data?.debloat
+        }
+      }));
+      setPackages(transformedData);
+      setHasBrowsed(true);
+      setActiveTab('query'); // Switch to query tab after search
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while searching packages');
+      setPackages([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const ErrorDisplay = ({ message }: { message: string }) => (
     <Alert variant="destructive" className="border-red-500 bg-red-50">
       <AlertDescription className="text-red-600 font-medium">
@@ -334,22 +379,21 @@ const PackageRegistry: React.FC = () => {
               placeholder="Search packages with regex..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch();
+                }
+              }}
               className="flex-1"
             />
-            <Button variant="secondary">
-              <Search className="w-4 h-4 mr-2" />
+            <Button onClick={handleSearch} disabled={loading}>
               Search
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="upload" onValueChange={() => {
-        // Reset states when switching tabs
-        setHasBrowsed(false);
-        setError(null);
-        setSuccessMessage(null);
-      }}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full grid grid-cols-2">
           <TabsTrigger value="upload">Package Management</TabsTrigger>
           <TabsTrigger value="query">Package Query</TabsTrigger>
