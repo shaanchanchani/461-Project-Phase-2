@@ -1,4 +1,4 @@
-import { QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { QueryCommand, UpdateCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { BaseDynamoService } from "./baseDynamoService";
 import { Package, PackageID, PackageTableItem, PackageVersionTableItem } from "../../types";
 import { log } from "../../logger";
@@ -218,6 +218,40 @@ export class PackageDynamoService extends BaseDynamoService {
             log.info(`Updated package ${name} with new ID ${updates.package_id} and version ${updates.latest_version}`);
         } catch (error) {
             log.error('Error updating package:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all packages with pagination, including all versions
+     */
+    async getAllPackages(offset: number = 0, limit: number = 10): Promise<PackageTableItem[]> {
+        try {
+            // First get all packages
+            const packagesResult = await this.docClient.send(new ScanCommand({
+                TableName: PACKAGES_TABLE,
+                Limit: limit,
+                ExclusiveStartKey: offset ? { name: offset.toString() } : undefined
+            }));
+
+            const packages = packagesResult.Items as PackageTableItem[] || [];
+            const result: PackageTableItem[] = [];
+
+            // For each package, get all its versions
+            for (const pkg of packages) {
+                const versions = await this.getPackageVersions(pkg.package_id);
+                // Add each version as a separate package entry
+                for (const version of versions) {
+                    result.push({
+                        ...pkg,
+                        latest_version: version.version // Override latest_version with this version
+                    });
+                }
+            }
+
+            return result;
+        } catch (error) {
+            log.error('Error getting all packages:', error);
             throw error;
         }
     }
