@@ -735,29 +735,29 @@ export class PackageUploadService {
         // You can adjust this threshold based on your requirements
         const MINIMUM_NET_SCORE = 0.15; // changing this to .15 will pass autograder tests
         
-        if (metrics.net_score < MINIMUM_NET_SCORE) {
-          throw new Error(`Package does not meet quality requirements. Net score: ${metrics.net_score}`);
+        if (metrics.NetScore < MINIMUM_NET_SCORE) {
+          throw new Error(`Package does not meet quality requirements. Net score: ${metrics.NetScore}`);
         }
 
-        log.info(`Package metrics check passed. Net score: ${metrics.net_score}`);
+        log.info(`Package metrics check passed. Net score: ${metrics.NetScore}`);
 
         return {
-          net_score: metrics.net_score,
-          bus_factor: metrics.bus_factor,
-          ramp_up: metrics.ramp_up,
-          responsive_maintainer: metrics.responsive_maintainer,
-          license_score: metrics.license_score,
-          good_pinning_practice: metrics.good_pinning_practice,
-          pull_request: metrics.pull_request,
-          correctness: metrics.correctness,
-          bus_factor_latency: metrics.bus_factor_latency,
-          ramp_up_latency: metrics.ramp_up_latency,
-          responsive_maintainer_latency: metrics.responsive_maintainer_latency,
-          license_score_latency: metrics.license_score_latency,
-          good_pinning_practice_latency: metrics.good_pinning_practice_latency,
-          pull_request_latency: metrics.pull_request_latency,
-          correctness_latency: metrics.correctness_latency,
-          net_score_latency: metrics.net_score_latency
+          net_score: metrics.NetScore,
+          bus_factor: metrics.BusFactor,
+          ramp_up: metrics.RampUp,
+          responsive_maintainer: metrics.ResponsivenessScore,
+          license_score: metrics.LicenseScore,
+          good_pinning_practice: metrics.GoodPinningPractice,
+          pull_request: metrics.PullRequest,
+          correctness: metrics.Correctness,
+          bus_factor_latency: metrics.latencies.BusFactorLatency,
+          ramp_up_latency: metrics.latencies.RampUpLatency,
+          responsive_maintainer_latency: metrics.latencies.ResponsivenessLatency,
+          license_score_latency: metrics.latencies.LicenseLatency,
+          good_pinning_practice_latency: metrics.latencies.PinnedDependenciesLatency,
+          pull_request_latency: metrics.latencies.PullRequestLatency,
+          correctness_latency: metrics.latencies.CorrectnessLatency,
+          net_score_latency: 0 // This isn't provided by GetNetScore, using 0 as default
         };
       } catch (error: any) {
         log.error(`Attempt ${attempt}: Error checking package metrics:`, error);
