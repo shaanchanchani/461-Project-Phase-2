@@ -1,52 +1,76 @@
 // src/services/searchService.ts
 import { log } from '../logger';
-import type { PackageMetadata, PackageQuery } from '../types';
-import { packageDynamoService } from './dynamoServices';
+import type { PackageMetadata, PackageQuery, PackageResponse } from '../types';
+import { packageSearchDynamoService } from './dynamoServices/searchDynamoService';
 
 export class SearchService {
     /**
      * List packages based on query with pagination
      */
-    static async listPackages(query: PackageQuery[], offset?: string): Promise<PackageMetadata[]> {
+    static async listPackages(packages: PackageQuery[]): Promise<PackageResponse[]> {
         try {
-            const offsetNum = offset ? parseInt(offset) : 0;
+            const results: PackageResponse[] = [];
+            const seenVersions = new Set<string>(); // Track unique version+name combinations
             
             // Check if this is a wildcard query to get all packages
-            const isWildcard = query.some(q => q.Name === '*');
-
+            const isWildcard = packages.some(q => q.Name === '*');
             if (isWildcard) {
-                const packages = await packageDynamoService.getAllPackages(offsetNum);
-                return packages.map(pkg => ({
-                    Name: pkg.name,
-                    Version: pkg.latest_version,
-                    ID: pkg.package_id
-                }));
+                log.info('Processing wildcard query');
+                const allVersions = await packageSearchDynamoService.getAllPackageVersions();
+                log.info(`Found all versions:`, allVersions);
+                allVersions.forEach(version => {
+                    const key = `${version.name}:${version.version}`;
+                    if (!seenVersions.has(key)) {
+                        seenVersions.add(key);
+                        results.push({
+                            Name: version.name,
+                            Version: version.version,
+                            ID: version.package_id
+                        });
+                    }
+                });
+                return results;
             }
 
-            // Process each query
-            const results: PackageMetadata[] = [];
-            for (const q of query) {
-                const pkg = await packageDynamoService.getPackageByName(q.Name);
-                if (pkg) {
-                    // If version is specified, check if it matches
-                    if (q.Version && q.Version !== pkg.latest_version) {
-                        continue;
+            for (const pkg of packages) {
+                log.info(`Processing package query:`, pkg);
+                if (pkg.Version) {
+                    // If version is specified, get that specific version
+                    const version = await packageSearchDynamoService.getPackageVersionByNameAndVersion(pkg.Name, pkg.Version);
+                    log.info(`Found specific version:`, version);
+                    if (version) {
+                        const key = `${pkg.Name}:${version.version}`;
+                        if (!seenVersions.has(key)) {
+                            seenVersions.add(key);
+                            results.push({
+                                Name: pkg.Name,
+                                Version: version.version,
+                                ID: version.package_id
+                            });
+                        }
                     }
-                    
-                    results.push({
-                        Name: pkg.name,
-                        Version: pkg.latest_version,
-                        ID: pkg.package_id
+                } else {
+                    // If no version specified, get all versions
+                    const versions = await packageSearchDynamoService.getPackageVersionsByName(pkg.Name);
+                    log.info(`Found all versions:`, versions);
+                    versions.forEach(version => {
+                        const key = `${pkg.Name}:${version.version}`;
+                        if (!seenVersions.has(key)) {
+                            seenVersions.add(key);
+                            results.push({
+                                Name: pkg.Name,
+                                Version: version.version,
+                                ID: version.package_id
+                            });
+                        }
                     });
                 }
             }
 
-            // Apply pagination
-            const start = offsetNum;
-            const end = start + 10; // Page size of 10
-            return results.slice(start, end);
+            log.info(`Final results:`, results);
+            return results;
         } catch (error) {
-            log.error('Error listing packages:', error);
+            log.error('Error in listPackages:', error);
             throw error;
         }
     }
@@ -54,22 +78,37 @@ export class SearchService {
     /**
      * Search packages by regex pattern
      */
-    static async searchByRegEx(pattern: string): Promise<PackageMetadata[]> {
+    static async searchByRegEx(pattern: string): Promise<PackageResponse[]> {
         try {
-            // Create RegExp object from pattern
+            log.info(`Searching packages by regex: ${pattern}`);
             const regex = new RegExp(pattern);
             
-            // Get all packages and filter by regex
-            const allPackages = await packageDynamoService.getAllPackages(0, 100);
-            return allPackages
-                .filter(pkg => regex.test(pkg.name))
-                .map(pkg => ({
-                    Name: pkg.name,
-                    Version: pkg.latest_version,
-                    ID: pkg.package_id
-                }));
+            // Get all package versions and filter by regex
+            const allVersions = await packageSearchDynamoService.getAllPackageVersions();
+            log.info(`Found all versions:`, allVersions);
+
+            // Use a Set to track unique name+version combinations
+            const seenVersions = new Set<string>();
+            const results: PackageResponse[] = [];
+
+            allVersions.forEach(version => {
+                if (regex.test(version.name)) {
+                    const key = `${version.name}:${version.version}`;
+                    if (!seenVersions.has(key)) {
+                        seenVersions.add(key);
+                        results.push({
+                            Name: version.name,
+                            Version: version.version,
+                            ID: version.package_id
+                        });
+                    }
+                }
+            });
+
+            log.info(`Found matching packages:`, results);
+            return results;
         } catch (error) {
-            log.error('Error searching packages:', error);
+            log.error('Error searching packages by regex:', error);
             throw error;
         }
     }
@@ -77,20 +116,21 @@ export class SearchService {
     /**
      * Search packages by name
      */
-    static async searchByName(name: string): Promise<PackageMetadata[]> {
+    static async searchByName(name: string): Promise<PackageResponse[]> {
         try {
-            const pkg = await packageDynamoService.getPackageByName(name);
+            const pkg = await packageSearchDynamoService.getPackageByName(name);
             if (!pkg) {
                 return [];
             }
 
-            return [{
+            const versions = await packageSearchDynamoService.getPackageVersions(pkg.package_id);
+            return versions.map(version => ({
                 Name: pkg.name,
-                Version: pkg.latest_version,
-                ID: pkg.package_id
-            }];
+                Version: version.version,
+                ID: version.package_id
+            }));
         } catch (error) {
-            log.error('Error searching packages by name:', error);
+            log.error('Error searching by name:', error);
             throw error;
         }
     }

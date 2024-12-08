@@ -73,6 +73,7 @@ export interface PackageVersionTableItem {
     version_id: string;
     package_id: string;
     version: string;
+    name: string;           // Added package name field
     zip_file_path: string;
     debloated: boolean;
     created_at: string;
@@ -126,6 +127,12 @@ export interface PackageData {
 export interface Package {
     metadata: PackageMetadata;
     data: PackageData;
+}
+
+export interface PackageResponse {
+    Name: string;
+    Version: string;
+    ID: string;
 }
 
 // Processed Package Type

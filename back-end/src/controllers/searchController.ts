@@ -6,7 +6,6 @@ import { PackageQuery } from '../types';
 export class SearchController {
     static async listPackages(req: Request, res: Response) {
         try {
-            const { offset } = req.query;
             const query = req.body;
 
             // Validate that the request body is an array
@@ -24,16 +23,11 @@ export class SearchController {
                 }
             }
 
-            const packages = await SearchService.listPackages(query as PackageQuery[], offset as string);
+            const packages = await SearchService.listPackages(query as PackageQuery[]);
             
             // Check if too many packages would be returned
             if (packages.length > 100) { // Arbitrary limit, adjust as needed
                 return res.status(413).json({ error: 'Too many packages returned' });
-            }
-
-            // Set the offset header if there are more results
-            if (packages.length === 10) { // If we got a full page
-                res.set('offset', (parseInt(offset as string || '0') + 10).toString());
             }
 
             return res.status(200).json(packages);

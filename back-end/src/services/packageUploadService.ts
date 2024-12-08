@@ -91,6 +91,7 @@ export class PackageUploadService {
       const versionData: PackageVersionTableItem = {
         version_id: versionId,
         package_id: packageId,
+        name,              // Added package name
         version,
         zip_file_path: s3Key,
         debloated: debloat,
@@ -247,6 +248,7 @@ export class PackageUploadService {
       const versionData: PackageVersionTableItem = {
         version_id: versionId,
         package_id: packageId,
+        name,              // Added package name
         version,
         zip_file_path: s3Key,
         debloated: debloat,

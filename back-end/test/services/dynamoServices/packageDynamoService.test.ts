@@ -29,6 +29,7 @@ describe('PackageDynamoService', () => {
             version_id: 'v123',
             package_id: '123',
             version: '1.0.0',
+            name: 'test-package',
             zip_file_path: 's3://path',
             created_at: new Date().toISOString(),
             debloated: false,

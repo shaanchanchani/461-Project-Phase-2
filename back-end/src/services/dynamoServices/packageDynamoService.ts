@@ -53,6 +53,7 @@ export class PackageDynamoService extends BaseDynamoService {
      */
     async getPackageByName(name: string): Promise<PackageTableItem | null> {
         try {
+            log.info(`Getting package by name: ${name}`);
             const result = await this.docClient.send(new QueryCommand({
                 TableName: PACKAGES_TABLE,
                 KeyConditionExpression: '#name = :name',
@@ -64,7 +65,15 @@ export class PackageDynamoService extends BaseDynamoService {
                 }
             }));
 
-            return result.Items?.[0] as PackageTableItem || null;
+            log.info(`Found package:`, result.Items?.[0]);
+            const pkg = result.Items?.[0] as PackageTableItem;
+            if (pkg) {
+                // Get all versions for this package
+                const versions = await this.getPackageVersions(pkg.package_id);
+                log.info(`Found versions for ${pkg.package_id}:`, versions);
+            }
+
+            return pkg || null;
         } catch (error) {
             log.error('Error getting package by name:', error);
             throw error;
@@ -128,7 +137,8 @@ export class PackageDynamoService extends BaseDynamoService {
                 KeyConditionExpression: 'package_id = :packageId',
                 ExpressionAttributeValues: {
                     ':packageId': packageId
-                }
+                },
+                ScanIndexForward: false  // Get versions in descending order
             }));
 
             return result.Items as PackageVersionTableItem[] || [];
