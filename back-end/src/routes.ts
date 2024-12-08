@@ -1,6 +1,5 @@
 // src/routes.ts
 import express, { Request, Response, NextFunction, RequestHandler } from 'express';
-// import { packageController } from './controllers/packageController';
 import { SearchController } from './controllers/searchController';
 import { resetController } from './controllers/resetController';
 import { costController } from './controllers/costController';
@@ -47,8 +46,8 @@ router.get('/tracks', asyncHandler(async (req: Request, res: Response) => {
 router.use(authMiddleware);
 
 // Package Search and List Endpoints
-// router.post('/packages', asyncHandler(packageController.listPackages));
-// router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
+router.post('/packages', asyncHandler(SearchController.listPackages));
+router.post('/package/byRegEx', asyncHandler(SearchController.searchByRegEx));
 
 // Package Retrieval Endpoints
 router.get('/package/:id', asyncHandler(downloadController.getPackageById));
