@@ -9,8 +9,12 @@ export class SearchService {
      */
     static async listPackages(offset?: string): Promise<PackageMetadata[]> {
         try {
-            // Implementation will be added in package-read branch
-            return [];
+            const packages = await packageDynamoService.getAllPackages(offset);
+            return packages.map(pkg => ({
+                Name: pkg.name,
+                ID: pkg.package_id,
+                Version: pkg.latest_version || '0.0.0'
+            }));
         } catch (error) {
             log.error('Error listing packages:', error);
             throw error;
@@ -22,8 +26,20 @@ export class SearchService {
      */
     static async searchByName(name: string): Promise<PackageMetadata[]> {
         try {
-            // Implementation will be added in package-read branch
-            return [];
+            if (!name.trim()) {
+                return [];
+            }
+            
+            const packageItem = await packageDynamoService.getPackageByName(name);
+            if (!packageItem) {
+                return [];
+            }
+
+            return [{
+                Name: packageItem.name,
+                ID: packageItem.package_id,
+                Version: packageItem.latest_version || '0.0.0'
+            }];
         } catch (error) {
             log.error('Error searching packages by name:', error);
             throw error;
@@ -35,8 +51,16 @@ export class SearchService {
      */
     static async getPackageById(id: string): Promise<PackageMetadata | null> {
         try {
-            // Implementation will be added in package-read branch
-            return null;
+            const packageItem = await packageDynamoService.getRawPackageById(id);
+            if (!packageItem) {
+                return null;
+            }
+
+            return {
+                Name: packageItem.name,
+                ID: packageItem.package_id,
+                Version: packageItem.latest_version || '0.0.0'
+            };
         } catch (error) {
             log.error('Error getting package by ID:', error);
             throw error;

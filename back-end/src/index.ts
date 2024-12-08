@@ -5,7 +5,7 @@ import router from './routes';
 import { log } from './logger';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = Number(process.env.PORT) || 3000;
 
 // Trust proxy headers
 app.set('trust proxy', true);
@@ -35,7 +35,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 // Start server
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
     log.info(`Server running on port ${port}`);
 });
 

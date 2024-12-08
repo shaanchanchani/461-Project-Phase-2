@@ -41,9 +41,9 @@ export class PackageUpdateService {
             throw new Error('Package ID in metadata must match URL parameter');
         }
 
-        // Get the package by name
-        log.info('Fetching package by name', { name: metadata.Name });
-        const existingPackage = await this.packageDynamoService.getPackageByName(metadata.Name);
+        // Get the package by ID
+        log.info('Fetching package by ID', { id: metadata.ID });
+        const existingPackage = await this.packageDynamoService.getRawPackageById(metadata.ID);
         log.info('Fetched package', { existingPackage });
         
         // Check if package exists
@@ -87,7 +87,7 @@ export class PackageUpdateService {
 
             if (!uploadResponse) {
                 log.error('Upload failed - no response');
-                throw new Error('Failed to update package: Upload failed');
+                throw new Error('Upload failed');
             }
 
             // Update the package in DynamoDB

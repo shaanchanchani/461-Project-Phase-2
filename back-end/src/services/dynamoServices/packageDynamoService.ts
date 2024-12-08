@@ -1,4 +1,4 @@
-import { QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { QueryCommand, UpdateCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { BaseDynamoService } from "./baseDynamoService";
 import { Package, PackageID, PackageTableItem, PackageVersionTableItem } from "../../types";
 import { log } from "../../logger";
@@ -221,6 +221,28 @@ export class PackageDynamoService extends BaseDynamoService {
             }));
         } catch (error) {
             log.error('Error updating package:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all packages with optional pagination
+     */
+    async getAllPackages(offset?: string): Promise<PackageTableItem[]> {
+        try {
+            const params: any = {
+                TableName: PACKAGES_TABLE,
+                Limit: 10
+            };
+
+            if (offset) {
+                params.ExclusiveStartKey = { name: offset };
+            }
+
+            const result = await this.docClient.send(new ScanCommand(params));
+            return result.Items as PackageTableItem[] || [];
+        } catch (error) {
+            log.error('Error getting all packages:', error);
             throw error;
         }
     }
