@@ -178,21 +178,21 @@ export class PackageDynamoService extends BaseDynamoService {
     }
 
     /**
-     * Update package's latest version
+     * Update package's latest version and package ID
      */
-    public async updatePackageLatestVersion(packageId: string, version: string): Promise<void> {
+    public async updatePackageLatestVersion(packageId: string, version: string, newPackageId: string): Promise<void> {
         try {
             await this.docClient.send(new UpdateCommand({
                 TableName: PACKAGES_TABLE,
                 Key: {
                     name: packageId
                 },
-                UpdateExpression: 'SET latest_version = :version',
+                UpdateExpression: 'SET latest_version = :version, package_id = :newPackageId',
                 ExpressionAttributeValues: {
-                    ':version': version
+                    ':version': version,
+                    ':newPackageId': newPackageId
                 }
             }));
-            log.info(`Updated latest version to ${version} for package ${packageId}`);
         } catch (error) {
             log.error('Error updating package latest version:', error);
             throw error;

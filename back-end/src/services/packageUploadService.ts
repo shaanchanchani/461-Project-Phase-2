@@ -28,7 +28,7 @@ export class PackageUploadService {
     };
   }
 
-  public async uploadPackageFromUrl(url: string, jsProgram?: string, debloat: boolean = false, userId?: string, packageId?: string): Promise<PackageUploadResponse> {
+  public async uploadPackageFromUrl(url: string, jsProgram?: string, debloat: boolean = false, userId?: string): Promise<PackageUploadResponse> {
     try {
       // Validate URL
       this.validateUrl(url);
@@ -60,10 +60,10 @@ export class PackageUploadService {
         log.info(`Creating new package ${name} with version ${version}`);
       }
 
-      // Use provided packageId or generate a new one
-      const newPackageId = packageId || existingPackage?.package_id || uuidv4();
-      log.info(`Using package ID: ${newPackageId}`);
+      // Always generate new package ID for S3 storage and version tracking
+      const newPackageId = uuidv4();
       const versionId = uuidv4();
+      log.info(`Generated new package ID: ${newPackageId} for version ${version}`);
 
       // Check package metrics before proceeding
       const metrics = await this.checkPackageMetrics(githubUrl);
@@ -78,7 +78,7 @@ export class PackageUploadService {
         base64Content = zipBuffer.toString('base64');
       }
 
-      // Upload to S3
+      // Upload to S3 using the new package ID
       const s3Key = `packages/${newPackageId}/content.zip`;
       await this.s3Service.uploadPackageContent(s3Key, zipBuffer);
       log.info(`Uploaded package to S3 with key: ${s3Key}`);
@@ -86,17 +86,25 @@ export class PackageUploadService {
       // Get the package size after uploading
       const packageSize = await this.s3Service.getPackageSize(newPackageId);
 
-      // Create package entry in DynamoDB
-      const packageData: PackageTableItem = {
-        package_id: newPackageId,
-        name,
-        latest_version: version,
-        description,
-        created_at: new Date().toISOString(),
-        user_id: userId || 'anonymous'
-      };
+      if (!existingPackage) {
+        // Create new package entry for new packages
+        const packageData: PackageTableItem = {
+          package_id: newPackageId,
+          name,
+          latest_version: version,
+          description,
+          created_at: new Date().toISOString(),
+          user_id: userId || 'anonymous'
+        };
+        await this.db.createPackageEntry(packageData);
+      } else {
+        // For existing packages, only update if this version is newer
+        if (this.isNewerVersion(version, existingPackage.latest_version)) {
+          await this.db.updatePackageLatestVersion(existingPackage.name, version, newPackageId);
+        }
+      }
 
-      // Create version entry in DynamoDB
+      // Always create new version entry with the new package ID
       const versionData: PackageVersionTableItem = {
         version_id: versionId,
         package_id: newPackageId,
@@ -107,23 +115,10 @@ export class PackageUploadService {
         standalone_cost: packageSize,
         total_cost: packageSize  // For now, total cost equals standalone cost until we implement dependencies
       };
-
-      // Store the metrics
-      await metricService.createMetricEntry(versionId, metrics);
-
-      if (!existingPackage) {
-        // Only create a new package entry if this is a completely new package
-        await this.db.createPackageEntry(packageData);
-      } else {
-        // For existing packages, only update the latest version if this version is newer
-        const currentVersion = existingPackage.latest_version;
-        if (this.isNewerVersion(version, currentVersion)) {
-          await this.db.updatePackageLatestVersion(existingPackage.name, version);
-        }
-      }
-
-      // Always create a new version entry
       await this.db.createPackageVersion(versionData);
+
+      // Store the metrics with the new version ID
+      await metricService.createMetricEntry(versionId, metrics);
 
       return {
         metadata: {
@@ -141,7 +136,7 @@ export class PackageUploadService {
     }
   }
 
-  public async uploadPackageFromZip(content: string, jsProgram?: string, debloat: boolean = false, userId?: string, packageId?: string): Promise<PackageUploadResponse> {
+  public async uploadPackageFromZip(content: string, jsProgram?: string, debloat: boolean = false, userId?: string): Promise<PackageUploadResponse> {
     try {
       // Decode base64 content to buffer
       let zipBuffer: Buffer;
@@ -214,10 +209,10 @@ export class PackageUploadService {
         log.info(`Creating new package ${name} with version ${version}`);
       }
 
-      // Use provided packageId or generate a new one
-      const newPackageId = packageId || existingPackage?.package_id || uuidv4();
-      log.info(`Using package ID: ${newPackageId}`);
+      // Always generate new package ID for S3 storage and version tracking
+      const newPackageId = uuidv4();
       const versionId = uuidv4();
+      log.info(`Generated new package ID: ${newPackageId} for version ${version}`);
 
       // Check package metrics before proceeding
       const metrics = await this.checkPackageMetrics(metricsUrl);
@@ -229,7 +224,7 @@ export class PackageUploadService {
         content = zipBuffer.toString('base64');
       }
 
-      // Upload to S3
+      // Upload to S3 using the new package ID
       const s3Key = `packages/${newPackageId}/content.zip`;
       await this.s3Service.uploadPackageContent(s3Key, zipBuffer);
       log.info(`Uploaded package to S3 with key: ${s3Key}`);
@@ -237,17 +232,25 @@ export class PackageUploadService {
       // Get the package size after uploading
       const packageSize = await this.s3Service.getPackageSize(newPackageId);
 
-      // Create package entry in DynamoDB
-      const packageData: PackageTableItem = {
-        package_id: newPackageId,
-        name,
-        latest_version: version,
-        description,
-        created_at: new Date().toISOString(),
-        user_id: userId || 'anonymous'
-      };
+      if (!existingPackage) {
+        // Create new package entry for new packages
+        const packageData: PackageTableItem = {
+          package_id: newPackageId,
+          name,
+          latest_version: version,
+          description,
+          created_at: new Date().toISOString(),
+          user_id: userId || 'anonymous'
+        };
+        await this.db.createPackageEntry(packageData);
+      } else {
+        // For existing packages, only update if this version is newer
+        if (this.isNewerVersion(version, existingPackage.latest_version)) {
+          await this.db.updatePackageLatestVersion(existingPackage.name, version, newPackageId);
+        }
+      }
 
-      // Create version entry in DynamoDB
+      // Always create new version entry with the new package ID
       const versionData: PackageVersionTableItem = {
         version_id: versionId,
         package_id: newPackageId,
@@ -258,23 +261,10 @@ export class PackageUploadService {
         standalone_cost: packageSize,
         total_cost: packageSize  // For now, total cost equals standalone cost until we implement dependencies
       };
-
-      // Store the metrics
-      await metricService.createMetricEntry(versionId, metrics);
-
-      if (!existingPackage) {
-        // Only create a new package entry if this is a completely new package
-        await this.db.createPackageEntry(packageData);
-      } else {
-        // For existing packages, only update the latest version if this version is newer
-        const currentVersion = existingPackage.latest_version;
-        if (this.isNewerVersion(version, currentVersion)) {
-          await this.db.updatePackageLatestVersion(existingPackage.name, version);
-        }
-      }
-
-      // Always create a new version entry
       await this.db.createPackageVersion(versionData);
+
+      // Store the metrics with the new version ID
+      await metricService.createMetricEntry(versionId, metrics);
 
       return {
         metadata: {

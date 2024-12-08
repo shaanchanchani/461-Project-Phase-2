@@ -11,7 +11,7 @@ export class UploadController {
 
     public createPackage = async (req: Request, res: Response) => {
         try {
-            const { URL: url, Content, JSProgram, debloat, packageId } = req.body;
+            const { URL: url, Content, JSProgram, debloat } = req.body;
             // Set a default user ID since auth is optional
             const userId = 'admin';
 
@@ -23,10 +23,10 @@ export class UploadController {
                 return res.status(400).json({ error: 'Cannot provide both URL and Content' });
             }
 
-            // Use packageId if provided (for testing)
+            // Upload package
             const result = url 
-                ? await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat, userId, packageId)
-                : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat, userId, packageId);
+                ? await this.packageUploadService.uploadPackageFromUrl(url, JSProgram, debloat, userId)
+                : await this.packageUploadService.uploadPackageFromZip(Content!, JSProgram, debloat, userId);
 
             return res.status(201).json(result);
         } catch (error: any) {
