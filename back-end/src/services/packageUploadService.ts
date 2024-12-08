@@ -16,7 +16,7 @@ const MAX_PACKAGE_SIZE_BYTES = MAX_PACKAGE_SIZE_MB * 1024 * 1024;
 
 export class PackageUploadService {
   private db: PackageDynamoService;
-  private s3Service: S3Service;
+  public s3Service: S3Service;
   private githubHeaders: Record<string, string>;
 
   constructor() {
@@ -282,7 +282,7 @@ export class PackageUploadService {
     }
   }
 
-  private findPackageJson(zip: AdmZip) {
+  public findPackageJson(zip: AdmZip) {
     // First try root level
     let entry = zip.getEntry('package.json');
     if (entry) return entry;
@@ -297,7 +297,7 @@ export class PackageUploadService {
     return null;
   }
 
-  private async extractRepositoryUrl(zip: AdmZip): Promise<string> {
+  public async extractRepositoryUrl(zip: AdmZip): Promise<string> {
     // Try package.json first (primary source)
     const packageJsonEntry = this.findPackageJson(zip);
     if (packageJsonEntry) {
@@ -413,7 +413,7 @@ export class PackageUploadService {
     }
   }
 
-  private async extractPackageInfo(url: string): Promise<{ name: string; version: string; description: string }> {
+  public async extractPackageInfo(url: string): Promise<{ name: string; version: string; description: string }> {
     const urlObj = new URL(url);
     let name: string;
     let version: string = '1.0.0';
@@ -530,7 +530,7 @@ export class PackageUploadService {
     return { name, version, description };
   }
 
-  private async fetchAndZipPackage(url: string): Promise<{ zipBuffer: Buffer; base64Content: string }> {
+  public async fetchAndZipPackage(url: string): Promise<{ zipBuffer: Buffer; base64Content: string }> {
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
     let ref: string | undefined;
@@ -577,7 +577,7 @@ export class PackageUploadService {
     }
   }
 
-  private async handleNpmUrl(url: string): Promise<string> {
+  public async handleNpmUrl(url: string): Promise<string> {
     try {
       log.info('Processing npm URL...');
       const packagePath = url.split('/package/')[1];
@@ -675,7 +675,7 @@ export class PackageUploadService {
     }
   }
 
-  private async checkPackageMetrics(url: string): Promise<{
+  public async checkPackageMetrics(url: string): Promise<{
     net_score: number;
     bus_factor: number;
     ramp_up: number;

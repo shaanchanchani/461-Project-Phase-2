@@ -56,7 +56,7 @@ router.get('/package/:id', asyncHandler(downloadController.getPackageById));
 router.get('/package/:id/download', asyncHandler(downloadController.getPackageById));
 
 // Package Update Endpoint
-router.put('/package/:id', asyncHandler(updateController.updatePackage));
+router.post('/package/:id', asyncHandler(updateController.updatePackage));
 
 // Package Rating Endpoints
 router.get('/package/:id/rate', asyncHandler(ratingController.ratePackage));
