@@ -300,8 +300,7 @@ export class PackageDynamoService extends BaseDynamoService {
     async getAllPackageVersions(offset?: string): Promise<PackageVersionTableItem[]> {
         try {
             const params: any = {
-                TableName: PACKAGE_VERSIONS_TABLE,
-                Limit: 10
+                TableName: PACKAGE_VERSIONS_TABLE
             };
 
             if (offset) {
