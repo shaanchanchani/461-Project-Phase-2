@@ -92,50 +92,40 @@ export async function GetNetScore(
     }
 
     log.info(`Calculating final NetScore...`);
-    const NetScore =
+    const end = new Date().getTime();
+    const total_time = (end - start) / 1000;
+
+    const NetScore = Math.min(1, Math.max(0,
       0.15 * correctnessScore.value +
       0.15 * busFactor.value +
       0.1 * licenseCompatibility.value +
       0.2 * responsiveness.value +
       0.15 * rampUpTime.value +
       0.15 * pinnedDependencies.value +
-      0.1 * pullRequestReview.value;
-
-    let net_time = (new Date().getTime() - start) / 1000;
-    log.info(
-      `NetScore calculated successfully for ${url}. Time taken: ${net_time}s`,
-    );
+      0.1 * pullRequestReview.value
+    ));
 
     return {
-      URL: url,
-      net_score: parseFloat(NetScore.toFixed(3)),
-      net_score_latency: parseFloat(net_time.toFixed(3)),
-      ramp_up: parseFloat(rampUpTime.value.toFixed(3)),
-      ramp_up_latency: parseFloat(
-        (rampUpTime.latency + api_time + clone_time).toFixed(3),
-      ),
-      correctness: parseFloat(correctnessScore.value.toFixed(3)),
-      correctness_latency: parseFloat(
-        (correctnessScore.latency + api_time + clone_time).toFixed(3),
-      ),
-      bus_factor: parseFloat(busFactor.value.toFixed(3)),
-      bus_factor_latency: parseFloat((busFactor.latency + api_time).toFixed(3)),
-      responsive_maintainer: parseFloat(responsiveness.value.toFixed(3)),
-      responsive_maintainer_latency: parseFloat(
-        (responsiveness.latency + api_time).toFixed(3),
-      ),
-      license_score: parseFloat(licenseCompatibility.value.toFixed(3)),
-      license_score_latency: parseFloat(
-        (licenseCompatibility.latency + api_time).toFixed(3),
-      ),
-      good_pinning_practice: parseFloat(pinnedDependencies.value.toFixed(3)),
-      good_pinning_practice_latency: parseFloat(
-        (pinnedDependencies.latency + api_time).toFixed(3),
-      ),
-      pull_request: parseFloat(pullRequestReview.value.toFixed(3)),
-      pull_request_latency: parseFloat(
-        (pullRequestReview.latency + api_time).toFixed(3),
-      ),
+      NetScore,
+      BusFactor: busFactor.value,
+      Correctness: correctnessScore.value,
+      RampUp: rampUpTime.value,
+      ResponsivenessScore: responsiveness.value,
+      LicenseScore: licenseCompatibility.value,
+      GoodPinningPractice: pinnedDependencies.value,
+      PullRequest: pullRequestReview.value,
+      total_time,
+      api_time,
+      clone_time,
+      latencies: {
+        BusFactorLatency: busFactor.latency,
+        CorrectnessLatency: correctnessScore.latency,
+        RampUpLatency: rampUpTime.latency,
+        ResponsivenessLatency: responsiveness.latency,
+        LicenseLatency: licenseCompatibility.latency,
+        PinnedDependenciesLatency: pinnedDependencies.latency,
+        PullRequestLatency: pullRequestReview.latency,
+      },
     };
   } catch (error) {
     console.error(`GetNetScore: Failed to calculate metrics for ${url}`, error);

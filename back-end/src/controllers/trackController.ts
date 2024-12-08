@@ -9,7 +9,7 @@ export class TrackController {
             // Return the tracks we're implementing
             // You can modify this array based on which tracks you're actually implementing
             const tracks = [
-                "None"
+                "None",
             ];
             
             log.info(`Successfully retrieved tracks: ${JSON.stringify(tracks)}`);

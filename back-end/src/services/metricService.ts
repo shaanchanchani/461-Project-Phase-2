@@ -1,13 +1,33 @@
-import { metricsDynamoService } from './dynamoServices';
+import { metricsDynamoService, packageDynamoService } from './dynamoServices';
 import { v4 as uuidv4 } from 'uuid';
 import { PackageMetricsTableItem } from '../types';
 import { log } from '../logger';
 
 export class MetricService {
-    private db: any;
+    protected metricsDb: any;
+    protected packageDb: any;
 
-    constructor(db?: any) {
-        this.db = db || metricsDynamoService;
+    constructor(metricsDb?: any, packageDb?: any) {
+        this.metricsDb = metricsDb || metricsDynamoService;
+        this.packageDb = packageDb || packageDynamoService;
+    }
+
+    public async getLatestPackageVersion(packageId: string): Promise<{ version_id: string } | null> {
+        try {
+            return await this.packageDb.getLatestPackageVersion(packageId);
+        } catch (error) {
+            log.error('Error retrieving latest package version:', error);
+            throw error;
+        }
+    }
+
+    public async getMetricsByVersionId(versionId: string): Promise<PackageMetricsTableItem | null> {
+        try {
+            return await this.metricsDb.getMetricsByVersionId(versionId);
+        } catch (error) {
+            log.error('Error retrieving metrics:', error);
+            throw error;
+        }
     }
 
     public async createMetricEntry(versionId: string, metrics: {
@@ -50,20 +70,11 @@ export class MetricService {
                 net_score_latency: metrics.net_score_latency
             };
 
-            await this.db.createMetricEntry(metricEntry);
+            await this.metricsDb.createMetricEntry(metricEntry);
             log.info(`Created metric entry for version ${versionId}`);
             return metricEntry;
         } catch (error) {
             log.error('Error creating metric entry:', error);
-            throw error;
-        }
-    }
-
-    public async getMetricsByVersionId(versionId: string): Promise<PackageMetricsTableItem | null> {
-        try {
-            return await this.db.getMetricsByVersionId(versionId);
-        } catch (error) {
-            log.error('Error retrieving metrics:', error);
             throw error;
         }
     }

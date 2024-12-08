@@ -63,7 +63,7 @@ register() {
 # Function to schedule a run
 schedule() {
   TIMESTAMP=$(get_log_timestamp)
-  LOG_FILE="logs/autograder_run_${TIMESTAMP}.log"
+  LOG_FILE="logs/autograder_${TIMESTAMP}.log"
   
   echo "Starting Autograder run at $(date)" > "$LOG_FILE"
   echo "----------------------------------------" >> "$LOG_FILE"
@@ -73,16 +73,49 @@ schedule() {
     "gh_token": "'"${AUTOGRADER_TOKEN}"'"
   }'
   
-  # echo "Request data: $DATA"
-  
+  echo "Scheduling run..." | tee -a "$LOG_FILE"
   curl --location "$BASE_URL/schedule" \
   --header 'Content-Type: application/json' \
   --data "$DATA" 2>&1 | tee -a "$LOG_FILE"
   
+  echo -e "\nMonitoring run progress..." | tee -a "$LOG_FILE"
   echo "----------------------------------------" >> "$LOG_FILE"
-  echo "Schedule command completed at $(date)" >> "$LOG_FILE"
   
-  echo "Log file created at: $LOG_FILE"
+  # Monitor the run
+  while true; do
+    RESPONSE=$(curl --silent --location --request GET "$BASE_URL/run/all" \
+      --header 'Content-Type: application/json' \
+      --data "$DATA")
+    
+    echo "$(date): $RESPONSE" | tee -a "$LOG_FILE"
+    
+    if [[ "$RESPONSE" != *$GROUP_NUMBER* ]]; then
+      echo -e "\nRun completed!" | tee -a "$LOG_FILE"
+      echo "----------------------------------------" >> "$LOG_FILE"
+      
+      # Get and save the results
+      echo -e "\nFetching results..." | tee -a "$LOG_FILE"
+      echo "----------------------------------------" >> "$LOG_FILE"
+      curl --location --request GET "$BASE_URL/last_run" \
+      --header 'Content-Type: application/json' \
+      --data "$DATA" | python3 -m json.tool | tee -a "$LOG_FILE"
+      
+      # Parse results if parser exists
+      if [ -f "./parse_autograder.py" ]; then
+        echo -e "\nParsing results..." | tee -a "$LOG_FILE"
+        ./parse_autograder.py
+      fi
+      
+      break
+    fi
+    
+    echo -n "   Monitoring Runs "
+    for i in {1..5}; do
+      echo -n "."
+      sleep 1
+    done
+    echo -ne '\r'
+  done
 }
 
 # Function to monitor all runs
@@ -221,7 +254,6 @@ case "$1" in
     ;;
   "schedule")
     schedule
-    monitor_runs
     ;;
   "monitor")
     monitor_runs

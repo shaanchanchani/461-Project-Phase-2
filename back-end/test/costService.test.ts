@@ -30,6 +30,7 @@ describe('CostService', () => {
                 version_id: 'v1',
                 package_id: 'test-pkg-123',
                 version: '1.0.0',
+                name: 'test-pkg-123',
                 zip_file_path: 's3://test/path',
                 debloated: false,
                 created_at: new Date().toISOString(),
@@ -61,6 +62,7 @@ describe('CostService', () => {
                 version_id: 'v1',
                 package_id: 'test-pkg-123',
                 version: '1.0.0',
+                name: 'test-pkg-123',
                 zip_file_path: 's3://test/path',
                 debloated: false,
                 created_at: new Date().toISOString(),
@@ -84,6 +86,7 @@ describe('CostService', () => {
             const mockVersion: PackageVersionTableItem = {
                 version_id: 'v1',
                 package_id: 'test-pkg-123',
+                name: 'test-pkg-123',
                 version: '1.0.0',
                 zip_file_path: 's3://test/path',
                 debloated: false,
