@@ -1,0 +1,24 @@
+back-end/dist/
+back-end/docker
+#ignore node_modules
+node_modules
+
+#ignore .env
+.env
+
+#ignore coverage/ generated after Jest
+coverage/
+
+#ignor .env
+.env
+
+
+test-results.json
+
+docker/dynamodb/
+
+.aider*
+
+#ignore .txt files
+#*.txt
+testpackages

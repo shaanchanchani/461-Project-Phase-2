@@ -1,0 +1,11 @@
+#!/bin/bash
+if [ "$1" = "test" ]; then
+  shift
+  npm test -- --json --outputFile=test-results.json --coverage --coverageReporters="json-summary" "$@" > jest-output.log 2>&1
+  npx tsx src/printTestResults.ts
+elif [ "$1" = "install" ]; then
+  shift
+  npm install "$@"
+else
+  npx tsx src/index.ts "$@"
+fi
