@@ -128,6 +128,23 @@ export interface Package {
     data: PackageData;
 }
 
+// Package Update Types
+export interface PackageUpdateMetadata {
+    Name: PackageName;
+    Version: string;
+    ID: PackageID;
+}
+
+export interface PackageUpdateData {
+    Content?: string;
+    URL?: string;
+}
+
+export interface PackageUpdate {
+    metadata: PackageUpdateMetadata;
+    data: PackageUpdateData;
+}
+
 // Processed Package Type
 export interface ProcessedPackage {
     url: string;
