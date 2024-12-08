@@ -56,10 +56,33 @@ export class PackageUpdateService {
             throw new Error('New version must be greater than current version');
         }
 
-        // Upload the package using the upload service
-        return data.URL
-            ? await this.packageUploadService.uploadPackageFromUrl(data.URL, data.JSProgram, false, userId)
-            : await this.packageUploadService.uploadPackageFromZip(data.Content!, data.JSProgram, false, userId);
+        // Get the package by name since we need it for the upload service
+        const packageByName = await this.packageDynamoService.getPackageByName(existingPackage.name);
+        if (!packageByName) {
+            throw new Error('Package not found by name');
+        }
+
+        // Check if this exact version already exists
+        const existingVersion = await this.packageDynamoService.getPackageVersion(packageId, metadata.Version);
+        if (existingVersion) {
+            throw new Error(`Package version ${metadata.Version} already exists`);
+        }
+
+        try {
+            // Upload the package using the upload service
+            // The upload service will handle:
+            // 1. Generating a new package ID
+            // 2. Creating a new version entry
+            // 3. Updating the package entry with the new package ID if this is a newer version
+            const result = data.URL
+                ? await this.packageUploadService.uploadPackageFromUrl(data.URL, data.JSProgram, false, userId)
+                : await this.packageUploadService.uploadPackageFromZip(data.Content!, data.JSProgram, false, userId);
+
+            return result;
+        } catch (error: any) {
+            log.error('Error updating package:', error);
+            throw error;
+        }
     }
 
     private isNewerVersion(newVersion: string, currentVersion: string): boolean {

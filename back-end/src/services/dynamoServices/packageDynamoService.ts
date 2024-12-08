@@ -199,6 +199,29 @@ export class PackageDynamoService extends BaseDynamoService {
         }
     }
 
+    /**
+     * Update package ID and latest version
+     */
+    public async updatePackage(name: string, updates: { package_id: string; latest_version: string }): Promise<void> {
+        try {
+            await this.docClient.send(new UpdateCommand({
+                TableName: PACKAGES_TABLE,
+                Key: {
+                    name: name
+                },
+                UpdateExpression: 'SET package_id = :pid, latest_version = :version',
+                ExpressionAttributeValues: {
+                    ':pid': updates.package_id,
+                    ':version': updates.latest_version
+                }
+            }));
+            log.info(`Updated package ${name} with new ID ${updates.package_id} and version ${updates.latest_version}`);
+        } catch (error) {
+            log.error('Error updating package:', error);
+            throw error;
+        }
+    }
+
     protected extractKeyFromItem(tableName: string, item: Record<string, any>): Record<string, any> {
         switch (tableName) {
             case PACKAGES_TABLE:

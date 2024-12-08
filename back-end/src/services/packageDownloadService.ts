@@ -29,12 +29,14 @@ export class PackageDownloadService {
                 throw new Error('Package not found');
             }
 
-            if (!packageData.data.Content) {
+            // Get version data
+            const versionData = await this.packageDb.getPackageVersion(packageId, packageData.metadata.Version);
+            if (!versionData || !versionData.zip_file_path) {
                 throw new Error('Package content not found');
             }
 
             // Get content from S3 using the zip file path
-            const content = await this.s3Service.getPackageContent(packageData.data.Content);
+            const content = await this.s3Service.getPackageContent(versionData.zip_file_path);
             const base64Content = content.toString('base64');
 
             // Record the download

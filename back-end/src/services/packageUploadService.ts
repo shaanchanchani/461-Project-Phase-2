@@ -56,7 +56,7 @@ export class PackageUploadService {
       const metrics = await this.checkPackageMetrics(githubUrl);
 
       // Generate unique IDs
-      const packageId = existingPackage?.package_id || uuidv4();
+      const packageId = uuidv4(); // Always generate a new package ID
       const versionId = uuidv4();
 
       // Fetch package content and convert to base64
@@ -103,13 +103,17 @@ export class PackageUploadService {
       await metricService.createMetricEntry(versionId, metrics);
 
       if (!existingPackage) {
-        // Only create a new package entry if this is a completely new package
+        // Create a new package entry if this is a completely new package
         await this.db.createPackageEntry(packageData);
       } else {
-        // For existing packages, only update the latest version if this version is newer
+        // For existing packages, only update if this version is newer
         const currentVersion = existingPackage.latest_version;
         if (this.isNewerVersion(version, currentVersion)) {
-          await this.db.updatePackageLatestVersion(existingPackage.name, version);
+          // Update both package ID and latest version
+          await this.db.updatePackage(existingPackage.name, {
+            package_id: packageId,
+            latest_version: version
+          });
         }
       }
 
@@ -207,19 +211,19 @@ export class PackageUploadService {
         throw error;
       }
 
+      // Check package metrics after confirming package doesn't exist and repository exists
+      const metrics = await this.checkPackageMetrics(repoUrl);
+
+      // Generate unique IDs
+      const packageId = uuidv4(); // Always generate a new package ID
+      const versionId = uuidv4();
+
       // Apply debloating if requested
       if (debloat) {
         log.info(`Debloating package ${name} version ${version}`);
         zipBuffer = await debloatService.debloatPackage(zipBuffer);
         content = zipBuffer.toString('base64');
       }
-
-      // Check package metrics after confirming package doesn't exist and repository exists
-      const metrics = await this.checkPackageMetrics(repoUrl);
-
-      // Generate unique IDs
-      const packageId = existingPackage?.package_id || uuidv4();
-      const versionId = uuidv4();
 
       // Upload to S3
       const s3Key = `packages/${packageId}/content.zip`;
@@ -255,13 +259,17 @@ export class PackageUploadService {
       await metricService.createMetricEntry(versionId, metrics);
 
       if (!existingPackage) {
-        // Only create a new package entry if this is a completely new package
+        // Create a new package entry if this is a completely new package
         await this.db.createPackageEntry(packageData);
       } else {
-        // For existing packages, only update the latest version if this version is newer
+        // For existing packages, only update if this version is newer
         const currentVersion = existingPackage.latest_version;
         if (this.isNewerVersion(version, currentVersion)) {
-          await this.db.updatePackageLatestVersion(existingPackage.name, version);
+          // Update both package ID and latest version
+          await this.db.updatePackage(existingPackage.name, {
+            package_id: packageId,
+            latest_version: version
+          });
         }
       }
 
