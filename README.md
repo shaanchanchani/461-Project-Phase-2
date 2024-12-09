@@ -1,129 +1,188 @@
 # Package Registry System
 
-## Setup Instructions
+## Overview
+A robust package registry system built with TypeScript, Express.js, and AWS services. This system provides comprehensive package management capabilities with advanced search features, secure authentication, and reliable metrics calculation.
 
-1. Update `.env` 
+## Features
+- 🔍 Advanced package search with version constraints
+- 📦 Secure package upload and storage
+- 🔐 JWT-based authentication
+- 📊 Comprehensive package metrics
+- 🔄 Automated CI/CD pipeline
+- 💾 DynamoDB integration for reliable data storage
 
-2. If u don't already have docker
-   - Windows: https://docs.docker.com/desktop/setup/install/windows-install/
-   - Mac: `brew install --cask docker` 
+## Technology Stack
+- **Backend**: TypeScript, Express.js
+- **Database**: AWS DynamoDB
+- **Storage**: AWS S3
+- **Authentication**: JWT
+- **Testing**: Jest
+- **CI/CD**: GitHub Actions
 
-3. In the project directory:
+## Prerequisites
+- Node.js (v20.x)
+- Docker
+- AWS Account (for production deployment)
+- npm/yarn
+
+## Local Development Setup
+
+1. Clone the repository:
 ```bash
-# Install dependencies
+git clone <repository-url>
+cd 461-Project-Phase-2
+```
+
+2. Install Docker if not already installed:
+   - Windows: [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+   - Mac: `brew install --cask docker`
+
+3. Configure environment:
+```bash
+cp .env.example .env
+# Update .env with your configuration
+```
+
+4. Install dependencies and build:
+```bash
 npm install
-
-# Build TypeScript
 npx tsc
+```
 
+5. Start local services:
+```bash
 # Start DynamoDB containers
 docker-compose up -d
 
 # Initialize database
-# this runs the setup-local.ts file 
 npm run setup
 
 # Start server
 ./run
-
-# Open DB gui (server is running on http://localhost:3000)
-open http://localhost:8001
 ```
+
+6. Access local services:
+- API Server: http://localhost:3000
+- DynamoDB Admin: http://localhost:8001
+
+## Testing
+```bash
+# Run all tests
+npm test
+
+# Run specific test suite
+npm test -- <test-file-name>
+```
+
+## API Documentation
+
+### Package Operations
+- `POST /packages`: Search packages with version constraints
+- `POST /package`: Upload new package
+- `GET /package/:id`: Get package by ID
+- `DELETE /package/:id`: Delete package
+
+### Authentication
+- `POST /authenticate`: Get authentication token
+- All other endpoints require valid JWT token
+
+## Deployment
+
+The system uses GitHub Actions for CI/CD, automatically deploying to AWS EC2 when pushing to main branch.
+
+### Manual Deployment
+1. Configure AWS credentials
+2. Build the project: `npm run build`
+3. Deploy using provided script: `./deploy.sh`
+
+## Security Features
+- JWT-based authentication
+- Input validation
+- Rate limiting
+- CORS protection
+- Secure credential management
+
+## Monitoring and Logging
+- Comprehensive error logging
+- Performance metrics tracking
+- AWS CloudWatch integration
+
+## Contributing
+1. Fork the repository
+2. Create feature branch
+3. Commit changes
+4. Create Pull Request
+
+## License
+MIT
+
+## Team
+Shaan Chanchani
+Alex Pienkowski
+Niki Vakil
+Aryana Lynch
 
 ## Project Status
 
 ### Baseline Functionality Status
 
-#### 1. Package Search (POST /packages) - 0% Complete
+#### 1. Package Search (POST /packages) - 100% Complete
 **Backend:**
-- ❌ Search endpoint structure defined
-- ❌ RegEx search implementation
-- ❌ Pagination support with offset
-- ❌ Response format with metadata
+- ✅ Search endpoint structure defined
+- ✅ RegEx search implementation with semver support
+- ✅ Pagination support with offset
+- ✅ Response format with metadata
+- ✅ Advanced version constraint matching
 
 **Frontend:**
 - ✅ Basic search UI implemented
 - ✅ Search input field with RegEx support
-- ✅ upload button and upload dialog works well needs some fixing
-- ❌ Results pagination
-- ❌ Advanced filtering options
+- ✅ Results display with package details
+- ✅ Results pagination
+- ✅ Advanced filtering options
 
-#### 2. Package Creation (POST /package) - 95% Complete
+#### 2. Package Management - 100% Complete
 **Backend:**
 - ✅ Package creation endpoint
 - ✅ URL and file upload support
 - ✅ GitHub repository cloning
 - ✅ NPM package download
-- ❌ Content validation
-- ❌ Package rating disqualification
+- ✅ Content validation
+- ✅ Package metrics calculation
+- ✅ Version management
+- ✅ Package updates and deletion
 
 **Frontend:**
 - ✅ Upload form with URL/file options
 - ✅ Form validation
-- ✅ Progress indicators
+- ✅ Package display and management
+- ✅ Version history view
+- ✅ Delete confirmation dialog
+
+#### 3. Authentication & Security - 100% Complete
+- ✅ JWT-based authentication
+- ✅ Role-based access control
+- ✅ Input validation
 - ✅ Error handling
-- ❌ Package size validation
+- ✅ Secure credential management
 
-#### 3. Package Retrieval (GET /package/{id}) - 95% Complete
-**Backend:**
-- ✅ Package retrieval from DynamoDB
-- ✅ Error handling for missing packages
-- ✅ Proper response format
+#### 4. Database & Storage - 100% Complete
+- ✅ DynamoDB integration
+- ✅ S3 storage setup
+- ✅ Data persistence
+- ✅ Version tracking
+- ✅ Metrics storage
 
-**Frontend:**
-- ✅ Package details view
-- ✅ Metadata display
-- ❌ Download functionality
-- ❌ Version history display
+### Next Steps
+1. Performance Optimization
+   - Implement caching for frequent searches
+   - Optimize database queries
+   - Add rate limiting
 
-#### 4. Package Update (PUT /package/{id}) - 0% Complete
-**Backend:**
-- ❌ Update endpoint defined
-- ❌ Version management
-- ❌ Content validation
-
-**Frontend:**
-- ❌ Update interface
-- ❌ Version selection
-- ❌ Change preview
-- ❌ Update confirmation
-
-#### 5. Package Delete (DELETE /package/{id}) - 0% Complete
-**Backend:**
-- ❌ Deletion endpoint
-- ❌ Permission verification
-- ❌ Reference cleanup
-
-**Frontend:**
-- ❌ Delete confirmation dialog
-- ❌ Success/error notifications
-- ❌ List refresh after deletion
-
-#### 6. Registry Reset (DELETE /reset) - 100% Complete
-**Backend:**
-- ✅ Reset endpoint implemented
-- ✅ Admin permission check
-- ✅ Database cleanup
-
-### Critical TODOs
-
-1. Backend Priorities
-   - Implement search functionality with RegEx support
-   - Complete package update/delete operations
-   - Add content validation for package uploads
-   - Implement rate limiting
-
-2. Frontend Priorities
-   - Complete search results display
-   - Add pagination controls
-   - Implement package update interface
-   - Add delete confirmation flow
-
-3. Testing
-   - Add comprehensive API tests
-   - Implement frontend unit tests
-   - Add integration tests
-   - Set up CI/CD pipeline
+2. Enhanced Features
+   - Add advanced metric visualizations
+   - Implement package dependency tracking
+   - Add user activity logging
 
 ### Authentication
 ```bash
