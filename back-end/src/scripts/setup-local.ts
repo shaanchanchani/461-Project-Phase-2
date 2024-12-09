@@ -351,34 +351,36 @@ async function waitForDynamoDB() {
 }
 
 async function setupLocalDev() {
-    // Set environment variables for local development
-    process.env.USE_LOCAL_DYNAMODB = 'true';
-    process.env.AWS_REGION = 'local';
-    process.env.NODE_ENV = 'development';
-    
     try {
-        console.log('🚀 Setting up local development environment...');
-        
-        // Start Docker containers
-        console.log('📦 Starting Docker containers...');
-        await execAsync('docker-compose up -d');
-        
-        // Wait for DynamoDB to be ready
         await waitForDynamoDB();
         
-        // Create tables
-        console.log('📝 Creating DynamoDB tables...');
-        await createUsersTable();
-        await createUserGroupsTable();
-        await createPackagesTable();
-        await createVersionsTable();
-        await createMetricsTable();
-        await createDownloadsTable();
+        // First delete all existing tables
+        console.log('🗑️  Cleaning up existing tables...');
+        await Promise.all([
+            deleteTable(USERS_TABLE),
+            deleteTable(USER_GROUPS_TABLE),
+            deleteTable(PACKAGES_TABLE),
+            deleteTable(PACKAGE_VERSIONS_TABLE),
+            deleteTable(PACKAGE_METRICS_TABLE),
+            deleteTable(DOWNLOADS_TABLE)
+        ]);
+
+        // Wait a bit for tables to be fully deleted
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        console.log('✨ Local development environment setup complete!');
+        console.log('🏗️  Creating tables...');
+        await Promise.all([
+            createUsersTable(),
+            createUserGroupsTable(),
+            createPackagesTable(),
+            createVersionsTable(),
+            createMetricsTable(),
+            createDownloadsTable()
+        ]);
         
+        console.log('✨ Local development setup complete!');
     } catch (error) {
-        console.error('❌ Error setting up local development environment:', error);
+        console.error('❌ Error during setup:', error);
         process.exit(1);
     }
 }
