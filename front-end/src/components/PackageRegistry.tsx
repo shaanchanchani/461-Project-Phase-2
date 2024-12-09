@@ -43,6 +43,7 @@ const PackageRegistry: React.FC = () => {
   const [packages, setPackages] = useState<PackageData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadFormData, setUploadFormData] = useState<UploadFormData>({
     url: '',
@@ -52,6 +53,8 @@ const PackageRegistry: React.FC = () => {
     debloat: false
   });
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [hasBrowsed, setHasBrowsed] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
 
   const fetchPackages = async () => {
     setLoading(true);
@@ -87,8 +90,11 @@ const PackageRegistry: React.FC = () => {
         }
       }));
       setPackages(transformedData);
+      setHasBrowsed(true); // Set hasBrowsed after successfully getting packages
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while fetching packages');
+      setPackages([]);
     } finally {
       setLoading(false);
     }
@@ -104,8 +110,8 @@ const PackageRegistry: React.FC = () => {
   const validateUrl = (url: string): boolean => {
     try {
       // Use the same patterns as the backend
-      const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)\/?(?:\.git)?$/;
-      const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/([^\/]+)\/?$/;
+      const githubPattern = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/[^\/]+)?\/?$/;
+      const npmPattern = /^(?:https?:\/\/)?(?:www\.)?npmjs\.com\/package\/(@[^\/]+\/[^\/]+|[^\/]+)(?:\/v\/([^\/]+))?\/?$/;
 
       console.log('Validating URL:', url);
       console.log('GitHub pattern test:', githubPattern.test(url));
@@ -134,6 +140,7 @@ const PackageRegistry: React.FC = () => {
     setError(null);
     setUploadStatus(null);
     setLoading(true);
+    setHasBrowsed(false); // Reset browse state after upload
 
     try {
       // Validate URL if upload type is URL
@@ -274,6 +281,84 @@ const PackageRegistry: React.FC = () => {
     }
   };
 
+  const handleDownload = async (packageId: string) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`http://localhost:3000/package/${packageId}/download`, {
+        method: 'GET',
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to download package');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `package-${packageId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      setSuccessMessage('Package downloaded successfully');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while downloading the package');
+    } finally {
+      setLoading(false);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    }
+  };
+
+  const handleSearch = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:3000/package/byRegEx', {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ RegEx: searchQuery })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to search packages');
+      }
+
+      const data = await response.json();
+      // Transform the response to match PackageData interface
+      const transformedData = data.map((pkg: any) => ({
+        metadata: {
+          Name: pkg.Name || pkg.metadata?.Name,
+          Version: pkg.Version || pkg.metadata?.Version,
+          ID: pkg.ID || pkg.metadata?.ID
+        },
+        data: {
+          URL: pkg.URL || pkg.data?.URL,
+          Content: pkg.Content || pkg.data?.Content,
+          JSProgram: pkg.JSProgram || pkg.data?.JSProgram,
+          debloat: pkg.debloat || pkg.data?.debloat
+        }
+      }));
+      setPackages(transformedData);
+      setHasBrowsed(true);
+      setActiveTab('query'); // Switch to query tab after search
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while searching packages');
+      setPackages([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const ErrorDisplay = ({ message }: { message: string }) => (
     <Alert variant="destructive" className="border-red-500 bg-red-50">
       <AlertDescription className="text-red-600 font-medium">
@@ -294,17 +379,21 @@ const PackageRegistry: React.FC = () => {
               placeholder="Search packages with regex..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch();
+                }
+              }}
               className="flex-1"
             />
-            <Button variant="secondary">
-              <Search className="w-4 h-4 mr-2" />
+            <Button onClick={handleSearch} disabled={loading}>
               Search
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="upload">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full grid grid-cols-2">
           <TabsTrigger value="upload">Package Management</TabsTrigger>
           <TabsTrigger value="query">Package Query</TabsTrigger>
@@ -437,10 +526,6 @@ const PackageRegistry: React.FC = () => {
                     </form>
                   </DialogContent>
                 </Dialog>
-                <Button variant="default" className="w-full bg-slate-900 hover:bg-slate-800">
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Package
-                </Button>
 
                 {/* Secondary actions - light gray background */}
                 <Button variant="secondary" className="w-full">
@@ -456,6 +541,42 @@ const PackageRegistry: React.FC = () => {
                 <Button variant="outline" className="w-full">
                   <Package className="w-4 h-4 mr-2" />
                   Ingest NPM Package
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      const response = await fetch('http://localhost:3000/reset', {
+                        method: 'DELETE',
+                        headers: {
+                          ...getAuthHeaders(),
+                          'Content-Type': 'application/json'
+                        }
+                      });
+
+                      if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to reset registry');
+                      }
+
+                      setError(null);
+                      setSuccessMessage('Reset was successful');
+                      // Refresh the package list after reset
+                      await fetchPackages();
+                    } catch (err) {
+                      setSuccessMessage(null);
+                      setError(err instanceof Error ? err.message : 'An error occurred while resetting the registry');
+                    } finally {
+                      setLoading(false);
+                      // Clear success message after 5 seconds
+                      setTimeout(() => setSuccessMessage(null), 5000);
+                    }
+                  }}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  {loading ? 'Resetting...' : 'Reset Registry'}
                 </Button>
                 <Button variant="outline" className="w-full">
                   <HardDrive className="w-4 h-4 mr-2" />
@@ -488,6 +609,47 @@ const PackageRegistry: React.FC = () => {
                   Check Dependency Sizes
                 </Button>
               </div>
+
+              {/* Package list or empty state message */}
+              {hasBrowsed && (
+                packages.length > 0 ? (
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-4">Available Packages</h3>
+                    <div className="grid gap-4">
+                      {packages.map((pkg) => (
+                        <Card key={pkg.metadata.ID} className="p-4">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h3 className="text-lg font-semibold">{pkg.metadata.Name}</h3>
+                              <p className="text-sm text-gray-500">Version: {pkg.metadata.Version}</p>
+                              <p className="text-sm text-gray-500">ID: {pkg.metadata.ID}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownload(pkg.metadata.ID)}
+                                disabled={loading}
+                              >
+                                <Download className="w-4 h-4 mr-2" />
+                                {loading ? 'Downloading...' : 'Download'}
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-8 text-center p-8 border rounded-lg bg-gray-50">
+                    <Package className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+                    <h3 className="text-lg font-semibold text-gray-600 mb-2">No Packages Found</h3>
+                    <p className="text-gray-500">
+                      The package directory is empty. Please upload a package in the Package Management tab first.
+                    </p>
+                  </div>
+                )
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -500,56 +662,11 @@ const PackageRegistry: React.FC = () => {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          
-          {packages.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Available Packages</h3>
-              <div className="grid gap-4 mt-4">
-                {packages.map((pkg) => (
-                  <Card key={pkg.metadata.ID} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="text-lg font-semibold">{pkg.metadata.Name}</h3>
-                          <p className="text-sm text-gray-500">Version: {pkg.metadata.Version}</p>
-                          {pkg.data.URL && (
-                            <a 
-                              href={pkg.data.URL} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-sm text-blue-500 hover:text-blue-700"
-                            >
-                              View Source
-                            </a>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDownload(pkg.metadata.ID)}
-                            disabled={loading}
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
+          {successMessage && (
+            <Alert variant="default" className="mb-4 border-green-500 bg-green-50">
+              <AlertDescription className="text-green-600">{successMessage}</AlertDescription>
+            </Alert>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-6">
-          <Button variant="destructive" className="w-full">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset Registry
-          </Button>
         </CardContent>
       </Card>
 
