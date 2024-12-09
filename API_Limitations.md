@@ -5,7 +5,6 @@
 - Only accepts the following URL formats:
   - GitHub: `github.com/owner/repo` or `github.com/owner/repo/tree/version`
   - npm: `npmjs.com/package/name`
-- npm version-specific URLs (e.g., `npmjs.com/package/name/v/1.2.3`) are not supported
 - npm scoped packages may have inconsistent behavior
 
 ### Package Content Limitations
