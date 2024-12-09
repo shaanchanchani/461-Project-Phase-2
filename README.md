@@ -84,7 +84,6 @@ npm test -- <test-file-name>
 
 ### Authentication
 - `POST /authenticate`: Get authentication token
-- All other endpoints require valid JWT token
 
 ## Deployment
 
