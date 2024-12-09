@@ -22,3 +22,5 @@ docker/dynamodb/
 #ignore .txt files
 #*.txt
 testpackages
+
+.DS_Store

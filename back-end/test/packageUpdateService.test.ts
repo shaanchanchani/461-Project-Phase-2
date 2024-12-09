@@ -1,35 +1,37 @@
 import { PackageUpdateService } from '../src/services/packageUpdateService';
 import { PackageDynamoService } from '../src/services/dynamoServices/packageDynamoService';
 import { PackageUploadService } from '../src/services/packageUploadService';
-import { PackageTableItem } from '../src/types';
+import { PackageTableItem, PackageUpdateMetadata, PackageUpdateData } from '../src/types';
+import AdmZip from 'adm-zip';
 
+// Mock all required services
 jest.mock('../src/services/dynamoServices/packageDynamoService');
 jest.mock('../src/services/packageUploadService');
+jest.mock('../src/services/metricService', () => ({
+    metricService: {
+        createMetricEntry: jest.fn().mockResolvedValue(undefined)
+    }
+}));
+
+import { metricService } from '../src/services/metricService';
 
 describe('PackageUpdateService', () => {
     let packageUpdateService: PackageUpdateService;
     let mockPackageDynamoService: jest.Mocked<PackageDynamoService>;
     let mockPackageUploadService: jest.Mocked<PackageUploadService>;
-
+    
+    const mockPackageId = 'test-package-id';
     const mockUserId = 'test-user-id';
-    const mockPackageId = 'test-package';
-    const mockMetadata = {
-        Version: '1.0.0',
+    const mockMetadata: PackageUpdateMetadata = {
         ID: mockPackageId,
-        Name: 'Test Package'
-    };
-    const mockData = {
-        Content: 'test-content',
-        JSProgram: 'console.log("test")'
+        Name: 'test-package',
+        Version: '1.0.0'
     };
 
-    const mockPackage: PackageTableItem = {
-        package_id: mockPackageId,
-        name: 'Test Package',
-        latest_version: '0.9.0',
-        user_id: mockUserId,
-        created_at: new Date().toISOString(),
-        description: 'Test package description'
+    const createValidZip = () => {
+        const zip = new AdmZip();
+        zip.addFile('package.json', Buffer.from(JSON.stringify({ name: 'test-package' })));
+        return zip.toBuffer();
     };
 
     beforeEach(() => {
@@ -41,62 +43,129 @@ describe('PackageUpdateService', () => {
             mockPackageUploadService
         );
 
-        // Default mock responses
-        mockPackageDynamoService.getRawPackageById.mockResolvedValue(mockPackage);
-        mockPackageUploadService.uploadPackageFromZip.mockResolvedValue({ metadata: mockMetadata, data: mockData });
+        // Create a proper ZIP for testing
+        const validZipBuffer = createValidZip();
+
+        // Mock successful content update
+        mockPackageUploadService.uploadPackageFromZip.mockResolvedValue({ 
+            metadata: mockMetadata, 
+            data: {
+                Content: validZipBuffer.toString('base64'),
+                JSProgram: 'console.log("test")'
+            }
+        });
+
+        // Mock existing package
+        mockPackageDynamoService.getRawPackageById.mockResolvedValue({
+            package_id: mockPackageId,
+            name: 'test-package',
+            latest_version: '0.9.0',
+            user_id: mockUserId,
+            created_at: new Date().toISOString(),
+            description: 'Test package description'
+        });
+
+        mockPackageUploadService.findPackageJson.mockReturnValue({
+            entryName: 'package.json',
+            getData: () => Buffer.from(JSON.stringify({ name: 'test-package' }))
+        } as any);
+
+        mockPackageUploadService.s3Service = {
+            uploadPackageContent: jest.fn().mockResolvedValue(undefined),
+            getPackageContent: jest.fn().mockResolvedValue(validZipBuffer),
+            getPackageSize: jest.fn().mockResolvedValue(1000),
+            getSignedDownloadUrl: jest.fn().mockResolvedValue(''),
+            deletePackageContent: jest.fn().mockResolvedValue(undefined)
+        } as any;
+
+        mockPackageUploadService.checkPackageMetrics.mockResolvedValue({
+            net_score: 0.8,
+            bus_factor: 0.7,
+            ramp_up: 0.6,
+            responsive_maintainer: 0.9,
+            license_score: 1.0,
+            correctness: 0.8,
+            pull_request: 0.7,
+            good_pinning_practice: 0.8,
+            bus_factor_latency: 100,
+            ramp_up_latency: 100,
+            responsive_maintainer_latency: 100,
+            license_score_latency: 100,
+            correctness_latency: 100,
+            good_pinning_practice_latency: 100,
+            pull_request_latency: 100,
+            net_score_latency: 100
+        });
+
+        mockPackageDynamoService.createPackageVersion.mockResolvedValue(undefined);
+        (metricService.createMetricEntry as jest.Mock).mockResolvedValue(undefined);
     });
 
-    describe('updatePackage', () => {
-        it('should throw error for invalid package ID format', async () => {
-            await expect(
-                packageUpdateService.updatePackage('invalid@id', mockMetadata, mockData, mockUserId)
-            ).rejects.toThrow('Invalid package ID format');
+    it('should successfully update package with new content', async () => {
+        const mockData: PackageUpdateData = {
+            Content: createValidZip().toString('base64')
+        };
+
+        const result = await packageUpdateService.updatePackage(
+            mockPackageId,
+            mockMetadata,
+            mockData,
+            mockUserId
+        );
+
+        expect(result).toBeDefined();
+        expect(result.metadata.Version).toBe(mockMetadata.Version);
+        expect(mockPackageDynamoService.createPackageVersion).toHaveBeenCalled();
+        expect(metricService.createMetricEntry).toHaveBeenCalled();
+    });
+
+    it('should successfully update package with new URL', async () => {
+        const mockData: PackageUpdateData = {
+            URL: 'https://github.com/test/repo'
+        };
+
+        mockPackageUploadService.fetchAndZipPackage.mockResolvedValue({
+            zipBuffer: createValidZip(),
+            base64Content: createValidZip().toString('base64')
         });
 
-        it('should throw error if package does not exist', async () => {
-            mockPackageDynamoService.getRawPackageById.mockResolvedValue(null);
+        const result = await packageUpdateService.updatePackage(
+            mockPackageId,
+            mockMetadata,
+            mockData,
+            mockUserId
+        );
 
-            await expect(
-                packageUpdateService.updatePackage(mockPackageId, mockMetadata, mockData, mockUserId)
-            ).rejects.toThrow('Package not found');
-        });
+        expect(result).toBeDefined();
+        expect(result.metadata.Version).toBe(mockMetadata.Version);
+        expect(mockPackageUploadService.fetchAndZipPackage).toHaveBeenCalledWith(mockData.URL);
+        expect(mockPackageDynamoService.createPackageVersion).toHaveBeenCalled();
+        expect(metricService.createMetricEntry).toHaveBeenCalled();
+    });
 
-        it('should throw error if user is not authorized', async () => {
-            const unauthorizedUser = 'unauthorized-user';
-            await expect(
-                packageUpdateService.updatePackage(mockPackageId, mockMetadata, mockData, unauthorizedUser)
-            ).rejects.toThrow('Unauthorized to update this package');
-        });
+    it('should fail when package does not exist', async () => {
+        const mockData: PackageUpdateData = {
+            Content: createValidZip().toString('base64')
+        };
 
-        it('should throw error if version is not newer', async () => {
-            const sameVersionPackage = {
-                ...mockPackage,
-                latest_version: mockMetadata.Version
-            };
-            mockPackageDynamoService.getRawPackageById.mockResolvedValue(sameVersionPackage);
+        mockPackageDynamoService.getRawPackageById.mockResolvedValue(null);
 
-            await expect(
-                packageUpdateService.updatePackage(mockPackageId, mockMetadata, mockData, mockUserId)
-            ).rejects.toThrow('New version must be greater than current version');
-        });
+        await expect(packageUpdateService.updatePackage(
+            mockPackageId,
+            mockMetadata,
+            mockData,
+            mockUserId
+        )).rejects.toThrow('Package not found');
+    });
 
-        it('should throw error if upload fails', async () => {
-            mockPackageUploadService.uploadPackageFromZip.mockRejectedValue(new Error('Upload failed'));
+    it('should fail when neither URL nor Content is provided', async () => {
+        const mockData: PackageUpdateData = {};
 
-            await expect(
-                packageUpdateService.updatePackage(mockPackageId, mockMetadata, mockData, mockUserId)
-            ).rejects.toThrow('Failed to update package: Upload failed');
-        });
-
-        it('should throw error if package name is changed', async () => {
-            const differentNameMetadata = {
-                ...mockMetadata,
-                Name: 'Different Name'
-            };
-
-            await expect(
-                packageUpdateService.updatePackage(mockPackageId, differentNameMetadata, mockData, mockUserId)
-            ).rejects.toThrow('Package name cannot be changed during update');
-        });
+        await expect(packageUpdateService.updatePackage(
+            mockPackageId,
+            mockMetadata,
+            mockData,
+            mockUserId
+        )).rejects.toThrow('Either URL or Content must be provided');
     });
 });

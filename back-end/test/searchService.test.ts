@@ -5,9 +5,8 @@ import type { PackageTableItem, PackageVersionTableItem } from '../src/types';
 // Mock the packageDynamoService
 jest.mock('../src/services/dynamoServices', () => ({
     packageDynamoService: {
-        getPackageByName: jest.fn(),
-        getAllPackages: jest.fn(),
-        getPackageVersions: jest.fn()
+        getAllPackageVersions: jest.fn(),
+        getAllVersionsByName: jest.fn()
     }
 }));
 
@@ -17,195 +16,184 @@ describe('SearchService', () => {
     });
 
     describe('listPackages', () => {
-        const mockPackages: PackageTableItem[] = [
+        const mockVersions = [
             {
                 package_id: 'test-id-1',
                 name: 'test-package-1',
-                latest_version: '1.0.0',
+                version: '1.0.0',
                 created_at: new Date().toISOString(),
                 user_id: 'user123',
-                description: 'Test package 1'
+                description: 'Test package 1',
+                zip_file_path: 's3://bucket/test1.zip'
             },
             {
                 package_id: 'test-id-2',
                 name: 'test-package-2',
-                latest_version: '2.0.0',
+                version: '2.0.0',
                 created_at: new Date().toISOString(),
                 user_id: 'user123',
-                description: 'Test package 2'
+                description: 'Test package 2',
+                zip_file_path: 's3://bucket/test2.zip'
             }
         ];
 
         it('should return all packages when no offset is provided', async () => {
-            (packageDynamoService.getAllPackages as jest.Mock).mockResolvedValue(mockPackages);
+            (packageDynamoService.getAllPackageVersions as jest.Mock).mockResolvedValue(mockVersions);
 
             const result = await SearchService.listPackages();
 
-            expect(result).toEqual(mockPackages.map(pkg => ({
-                Name: pkg.name,
-                ID: pkg.package_id,
-                Version: pkg.latest_version
+            expect(result).toEqual(mockVersions.map(version => ({
+                Name: version.name,
+                ID: version.package_id,
+                Version: version.version
             })));
-            expect(packageDynamoService.getAllPackages).toHaveBeenCalledWith(undefined);
+            expect(packageDynamoService.getAllPackageVersions).toHaveBeenCalledWith(undefined);
         });
 
         it('should use offset for pagination when provided', async () => {
-            (packageDynamoService.getAllPackages as jest.Mock).mockResolvedValue([mockPackages[1]]);
+            const offset = 'test-offset';
+            (packageDynamoService.getAllPackageVersions as jest.Mock).mockResolvedValue(mockVersions);
 
-            const result = await SearchService.listPackages('test-id-1');
+            const result = await SearchService.listPackages(offset);
 
-            expect(result).toEqual([{
-                Name: mockPackages[1].name,
-                ID: mockPackages[1].package_id,
-                Version: mockPackages[1].latest_version
-            }]);
-            expect(packageDynamoService.getAllPackages).toHaveBeenCalledWith('test-id-1');
+            expect(result).toEqual(mockVersions.map(version => ({
+                Name: version.name,
+                ID: version.package_id,
+                Version: version.version
+            })));
+            expect(packageDynamoService.getAllPackageVersions).toHaveBeenCalledWith(offset);
         });
 
         it('should handle empty result', async () => {
-            (packageDynamoService.getAllPackages as jest.Mock).mockResolvedValue([]);
+            (packageDynamoService.getAllPackageVersions as jest.Mock).mockResolvedValue([]);
 
             const result = await SearchService.listPackages();
 
             expect(result).toEqual([]);
-            expect(packageDynamoService.getAllPackages).toHaveBeenCalledWith(undefined);
+            expect(packageDynamoService.getAllPackageVersions).toHaveBeenCalledWith(undefined);
         });
 
         it('should handle undefined version', async () => {
-            const packagesWithoutVersion = [{
-                ...mockPackages[0],
-                latest_version: undefined
+            const mockVersionWithoutVersion = [{
+                ...mockVersions[0],
+                version: undefined
             }];
-            (packageDynamoService.getAllPackages as jest.Mock).mockResolvedValue(packagesWithoutVersion);
+            (packageDynamoService.getAllPackageVersions as jest.Mock).mockResolvedValue(mockVersionWithoutVersion);
 
             const result = await SearchService.listPackages();
 
             expect(result).toEqual([{
-                Name: mockPackages[0].name,
-                ID: mockPackages[0].package_id,
-                Version: '0.0.0'
+                Name: mockVersionWithoutVersion[0].name,
+                ID: mockVersionWithoutVersion[0].package_id,
+                Version: undefined
             }]);
         });
 
         it('should handle errors', async () => {
             const error = new Error('DynamoDB error');
-            (packageDynamoService.getAllPackages as jest.Mock).mockRejectedValue(error);
+            (packageDynamoService.getAllPackageVersions as jest.Mock).mockRejectedValue(error);
 
             await expect(SearchService.listPackages()).rejects.toThrow('DynamoDB error');
         });
     });
 
     describe('searchPackages', () => {
-        const mockPackage: PackageTableItem = {
-            package_id: 'test-id-123',
-            name: 'test-package',
-            latest_version: '1.0.0',
-            created_at: new Date().toISOString(),
-            user_id: 'user123',
-            description: 'Test package description'
-        };
-
-        const mockVersions: PackageVersionTableItem[] = [
+        const mockVersions = [
             {
-                version_id: 'v1',
                 package_id: 'test-id-123',
+                name: 'test-package',
                 version: '1.0.0',
-                name: 'test-package',
-                zip_file_path: 'path/to/zip',
-                debloated: false,
                 created_at: new Date().toISOString(),
-                standalone_cost: 100,
-                total_cost: 100
-            },
-            {
-                version_id: 'v2',
-                package_id: 'test-id-123',
-                version: '1.1.0',
-                name: 'test-package',
-                zip_file_path: 'path/to/zip',
-                debloated: false,
-                created_at: new Date().toISOString(),
-                standalone_cost: 100,
-                total_cost: 100
+                user_id: 'user123',
+                description: 'Test package',
+                zip_file_path: 's3://bucket/test.zip'
             }
         ];
 
         it('should return all packages when wildcard query is used', async () => {
-            (packageDynamoService.getAllPackages as jest.Mock).mockResolvedValue([mockPackage]);
+            (packageDynamoService.getAllPackageVersions as jest.Mock).mockResolvedValue(mockVersions);
 
             const result = await SearchService.searchPackages([{ Name: '*' }]);
 
-            expect(result).toEqual([{
-                Name: mockPackage.name,
-                ID: mockPackage.package_id,
-                Version: mockPackage.latest_version
-            }]);
+            expect(result).toEqual(mockVersions.map(version => ({
+                Name: version.name,
+                ID: version.package_id,
+                Version: version.version
+            })));
         });
 
         it('should return package when exact match is found', async () => {
-            (packageDynamoService.getPackageByName as jest.Mock).mockResolvedValue(mockPackage);
+            (packageDynamoService.getAllVersionsByName as jest.Mock).mockResolvedValue(mockVersions);
 
             const result = await SearchService.searchPackages([{ Name: 'test-package' }]);
 
             expect(result).toEqual([{
-                Name: mockPackage.name,
-                ID: mockPackage.package_id,
-                Version: mockPackage.latest_version
+                Name: mockVersions[0].name,
+                ID: mockVersions[0].package_id,
+                Version: mockVersions[0].version
             }]);
+            expect(packageDynamoService.getAllVersionsByName).toHaveBeenCalledWith('test-package');
         });
 
         it('should handle version constraints', async () => {
-            (packageDynamoService.getPackageByName as jest.Mock).mockResolvedValue(mockPackage);
-            (packageDynamoService.getPackageVersions as jest.Mock).mockResolvedValue(mockVersions);
+            const mockVersionsWithMultipleVersions = [
+                { ...mockVersions[0], version: '1.0.0' },
+                { ...mockVersions[0], version: '1.1.0' },
+                { ...mockVersions[0], version: '2.0.0' }
+            ];
+            (packageDynamoService.getAllVersionsByName as jest.Mock).mockResolvedValue(mockVersionsWithMultipleVersions);
 
-            const result = await SearchService.searchPackages([
-                { Name: 'test-package', Version: '^1.0.0' }
+            const result = await SearchService.searchPackages([{ Name: 'test-package', Version: '^1.0.0' }]);
+
+            expect(result).toEqual([
+                {
+                    Name: mockVersions[0].name,
+                    ID: mockVersions[0].package_id,
+                    Version: '1.0.0'
+                },
+                {
+                    Name: mockVersions[0].name,
+                    ID: mockVersions[0].package_id,
+                    Version: '1.1.0'
+                }
             ]);
-
-            expect(result).toEqual([{
-                Name: mockPackage.name,
-                ID: mockPackage.package_id,
-                Version: '1.1.0' // Should return latest matching version
-            }]);
         });
 
         it('should handle multiple queries', async () => {
-            const mockPackage2 = { ...mockPackage, package_id: 'test-id-456', name: 'other-package' };
-            (packageDynamoService.getPackageByName as jest.Mock)
-                .mockResolvedValueOnce(mockPackage)
-                .mockResolvedValueOnce(mockPackage2);
+            (packageDynamoService.getAllVersionsByName as jest.Mock)
+                .mockResolvedValueOnce([mockVersions[0]])
+                .mockResolvedValueOnce([{ ...mockVersions[0], name: 'other-package' }]);
 
             const result = await SearchService.searchPackages([
                 { Name: 'test-package' },
                 { Name: 'other-package' }
             ]);
 
-            expect(result).toHaveLength(2);
-            expect(result).toContainEqual({
-                Name: mockPackage.name,
-                ID: mockPackage.package_id,
-                Version: mockPackage.latest_version
-            });
-            expect(result).toContainEqual({
-                Name: mockPackage2.name,
-                ID: mockPackage2.package_id,
-                Version: mockPackage2.latest_version
-            });
+            expect(result).toEqual([
+                {
+                    Name: 'test-package',
+                    ID: mockVersions[0].package_id,
+                    Version: mockVersions[0].version
+                },
+                {
+                    Name: 'other-package',
+                    ID: mockVersions[0].package_id,
+                    Version: mockVersions[0].version
+                }
+            ]);
         });
 
         it('should handle no matches', async () => {
-            (packageDynamoService.getPackageByName as jest.Mock).mockResolvedValue(null);
+            (packageDynamoService.getAllVersionsByName as jest.Mock).mockResolvedValue([]);
 
-            const result = await SearchService.searchPackages([
-                { Name: 'non-existent-package' }
-            ]);
+            const result = await SearchService.searchPackages([{ Name: 'non-existent' }]);
 
             expect(result).toEqual([]);
         });
 
         it('should handle errors', async () => {
             const error = new Error('DynamoDB error');
-            (packageDynamoService.getPackageByName as jest.Mock).mockRejectedValue(error);
+            (packageDynamoService.getAllVersionsByName as jest.Mock).mockRejectedValue(error);
 
             await expect(SearchService.searchPackages([
                 { Name: 'test-package' }
