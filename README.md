@@ -95,9 +95,7 @@ The system uses GitHub Actions for CI/CD, automatically deploying to AWS EC2 whe
 3. Deploy using provided script: `./deploy.sh`
 
 ## Security Features
-- JWT-based authentication
 - Input validation
-- Rate limiting
 - CORS protection
 - Secure credential management
 
@@ -183,21 +181,4 @@ MIT
    - Implement package dependency tracking
    - Add user activity logging
 
-### Authentication
-```bash
-# Get auth token
-curl -X PUT http://localhost:3000/authenticate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "User": {
-      "name": "admin",
-      "isAdmin": true
-    },
-    "Secret": {
-      "password": ""
-    }
-  }'
-```
-```bash
-   # Use the returned token for other requests
-   curl -H "X-Authorization: bearer <token>" 
+
