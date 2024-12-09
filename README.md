@@ -1,117 +1,88 @@
 # Package Registry System
 
 ## Overview
-A robust package registry system built with TypeScript, Express.js, and AWS services. This system provides comprehensive package management capabilities with advanced search features, secure authentication, and reliable metrics calculation.
+A robust package registry system built with TypeScript, Express.js, and React. This system provides comprehensive package management capabilities with advanced search features and reliable metrics calculation.
 
 ## Features
 - 🔍 Advanced package search with version constraints
 - 📦 Secure package upload and storage
-- 🔐 JWT-based authentication
 - 📊 Comprehensive package metrics
-- 🔄 Automated CI/CD pipeline
 - 💾 DynamoDB integration for reliable data storage
+- 🌐 Modern React-based frontend
 
 ## Technology Stack
-- **Backend**: TypeScript, Express.js
+### Backend
+- **Runtime**: TypeScript, Express.js
 - **Database**: AWS DynamoDB
 - **Storage**: AWS S3
-- **Authentication**: JWT
 - **Testing**: Jest
-- **CI/CD**: GitHub Actions
 
-## Prerequisites
-- Node.js (v20.x)
-- Docker
-- AWS Account (for production deployment)
-- npm/yarn
+### Frontend
+- **Framework**: React
+- **Styling**: Tailwind CSS
+- **State Management**: React Context
+- **API Client**: Axios
 
-## Local Development Setup
+## Accessing the Application
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd 461-Project-Phase-2
-```
-
-2. Install Docker if not already installed:
-   - Windows: [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
-   - Mac: `brew install --cask docker`
-
-3. Configure environment:
-```bash
-cp .env.example .env
-# Update .env with your configuration
-```
-
-4. Install dependencies and build:
-```bash
-npm install
-npx tsc
-```
-
-5. Start local services:
-```bash
-# Start DynamoDB containers
-docker-compose up -d
-
-# Initialize database
-npm run setup
-
-# Start server
-./run
-```
-
-6. Access local services:
-- API Server: http://localhost:3000
-- DynamoDB Admin: http://localhost:8001
-
-## Testing
-```bash
-# Run all tests
-npm test
-
-# Run specific test suite
-npm test -- <test-file-name>
-```
+### Production Endpoints
+- **Frontend**: [https://5173-01jdswgvp5v0yssm5cv98hhykt.cloudspaces.litng.ai/login](https://5173-01jdswgvp5v0yssm5cv98hhykt.cloudspaces.litng.ai/login)
+- **API**: [https://3000-01jdswgvp5v0yssm5cv98hhykt.cloudspaces.litng.ai](https://3000-01jdswgvp5v0yssm5cv98hhykt.cloudspaces.litng.ai)
 
 ## API Documentation
 
 ### Package Operations
-- `POST /packages`: Search packages with version constraints
-- `POST /package`: Upload new package
-- `GET /package/:id`: Get package by ID
-- `DELETE /package/:id`: Delete package
 
-### Authentication
-- `POST /authenticate`: Get authentication token
+#### Search Packages
+```http
+POST /api/packages/search
+Content-Type: application/json
 
-## Deployment
+{
+  "Name": "package-name",
+  "Version": "^1.0.0"
+}
+```
 
-The system uses GitHub Actions for CI/CD, automatically deploying to AWS EC2 when pushing to main branch.
+#### Upload Package
+```http
+POST /api/package
+Content-Type: application/json
 
-### Manual Deployment
-1. Configure AWS credentials
-2. Build the project: `npm run build`
-3. Deploy using provided script: `./deploy.sh`
+{
+  "URL": "https://github.com/username/repo"
+}
+```
 
-## Security Features
-- Input validation
-- CORS protection
-- Secure credential management
+#### Get Package
+```http
+GET /api/package/:id
+```
 
-## Monitoring and Logging
-- Comprehensive error logging
-- Performance metrics tracking
-- AWS CloudWatch integration
+#### Reset Registry
+```http
+DELETE /api/reset
+```
 
-## Contributing
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Create Pull Request
+## Data Flow
 
-## License
-MIT
+### Search Flow
+1. User enters search criteria
+2. Frontend sends POST request to `/api/packages/search`
+3. Backend processes search against DynamoDB
+4. Results displayed in frontend grid
+
+### Upload Flow
+1. User submits package URL
+2. Backend clones/downloads package content
+3. Metrics are calculated
+4. Package is stored in S3
+5. Metadata stored in DynamoDB
+
+### Download Flow
+1. User requests package download
+2. Backend generates S3 presigned URL
+3. Browser handles file download
 
 ## Team
 - Shaan Chanchani
@@ -156,6 +127,13 @@ MIT
 - ✅ Version history view
 - ✅ Delete confirmation dialog
 
+#### 3. Authentication & Security - 100% Complete
+- ✅ JWT-based authentication
+- ✅ Role-based access control
+- ✅ Input validation
+- ✅ Error handling
+- ✅ Secure credential management
+
 #### 4. Database & Storage - 100% Complete
 - ✅ DynamoDB integration
 - ✅ S3 storage setup
@@ -174,4 +152,21 @@ MIT
    - Implement package dependency tracking
    - Add user activity logging
 
-
+### Authentication
+```bash
+# Get auth token
+curl -X PUT http://localhost:3000/authenticate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "User": {
+      "name": "admin",
+      "isAdmin": true
+    },
+    "Secret": {
+      "password": ""
+    }
+  }'
+```
+```bash
+   # Use the returned token for other requests
+   curl -H "X-Authorization: bearer <token>" 
