@@ -1,13 +1,0 @@
-Starting Autograder run at Sat Dec  7 14:33:48 EST 2024
-----------------------------------------
-Scheduling run...
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   122  100    42  100    80    214    408 --:--:-- --:--:-- --:--:--   622100   122  100    42  100    80    214    407 --:--:-- --:--:-- --:--:--   619
-{"message":"Task scheduled successfully"}
-
-Monitoring run progress...
-----------------------------------------
-Sat Dec  7 14:33:49 EST 2024: ["1","6","7"]
-Sat Dec  7 14:33:54 EST 2024: ["1","6","7"]
-Sat Dec  7 14:33:59 EST 2024: ["1","6","7"]
