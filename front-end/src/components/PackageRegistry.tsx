@@ -4,17 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Package, Search, Upload, Download, RefreshCw, Star, HardDrive, RotateCcw } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Package, Upload, Download, RotateCcw, RefreshCw, Star } from 'lucide-react';
 import { getAuthHeaders } from '@/lib/auth';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 
 interface PackageData {
   metadata: {
@@ -27,6 +20,16 @@ interface PackageData {
     URL?: string;
     JSProgram?: string;
     debloat?: boolean;
+  };
+  rating?: {
+    BusFactor: number;
+    Correctness: number;
+    RampUp: number;
+    ResponsiveMaintainer: number;
+    LicenseScore: number;
+    GoodPinningPractice: number;
+    PullRequest: number;
+    NetScore: number;
   };
 }
 
@@ -56,6 +59,16 @@ const PackageRegistry: React.FC = () => {
   const [hasBrowsed, setHasBrowsed] = useState(false);
   const [activeTab, setActiveTab] = useState('upload');
   const [loadingPackages, setLoadingPackages] = useState<{ [key: string]: boolean }>({});
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<PackageData | null>(null);
+  const [updateFormData, setUpdateFormData] = useState({
+    url: '',
+    content: '',
+    updateType: 'url' as 'url' | 'content'
+  });
+  const [loadingRatings, setLoadingRatings] = useState<Record<string, boolean>>({});
+  const [showRatings, setShowRatings] = useState<Record<string, boolean>>({});
+  const [packageCosts, setPackageCosts] = useState<Record<string, { standaloneCost: number; totalCost: number } | null>>({});
 
   const fetchPackages = async () => {
     setLoading(true);
@@ -333,12 +346,19 @@ const PackageRegistry: React.FC = () => {
       }
 
       const costData = await response.json();
-      setSuccessMessage(`Package cost: $${costData.cost}`);
+      const packageCost = costData[packageId];
+      if (!packageCost) {
+        throw new Error('Invalid cost data received');
+      }
+      
+      setPackageCosts(prev => ({
+        ...prev,
+        [packageId]: packageCost
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while fetching package cost');
     } finally {
       setLoading(false);
-      setTimeout(() => setSuccessMessage(null), 5000);
     }
   };
 
@@ -386,6 +406,181 @@ const PackageRegistry: React.FC = () => {
     }
   };
 
+  const handleUpdatePackage = async (packageId: string) => {
+    const pkg = packages.find(p => p.metadata.ID === packageId);
+    if (!pkg) {
+      setError('Package not found');
+      return;
+    }
+    setSelectedPackage(pkg);
+    setUpdateFormData({
+      url: '',
+      content: '',
+      updateType: 'url'
+    });
+    setUpdateDialogOpen(true);
+  };
+
+  const handleUpdateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPackage) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const updateData = {
+        metadata: {
+          Name: selectedPackage.metadata.Name,
+          Version: selectedPackage.metadata.Version,
+          ID: selectedPackage.metadata.ID
+        },
+        data: updateFormData.updateType === 'url'
+          ? { URL: updateFormData.url }
+          : { Content: updateFormData.content }
+      };
+
+      const response = await fetch(`http://localhost:3000/package/${selectedPackage.metadata.ID}`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update package');
+      }
+
+      setSuccessMessage('Package updated successfully');
+      setUpdateDialogOpen(false);
+      await fetchPackages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while updating the package');
+    } finally {
+      setLoading(false);
+      setTimeout(() => setSuccessMessage(null), 5000);
+    }
+  };
+
+  const fetchPackageRating = async (packageId: string) => {
+    try {
+      setLoadingRatings(prev => ({ ...prev, [packageId]: true }));
+      
+      const response = await fetch(`http://localhost:3000/package/${packageId}/rate`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch package rating');
+      }
+
+      const ratingData = await response.json();
+      
+      // Update the packages state with the new rating
+      setPackages(prevPackages => 
+        prevPackages.map(pkg => 
+          pkg.metadata.ID === packageId 
+            ? { ...pkg, rating: ratingData }
+            : pkg
+        )
+      );
+
+      // Automatically show the rating when it's fetched
+      setShowRatings(prev => ({ ...prev, [packageId]: true }));
+
+    } catch (error) {
+      console.error('Error fetching package rating:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch package rating');
+    } finally {
+      setLoadingRatings(prev => ({ ...prev, [packageId]: false }));
+    }
+  };
+
+  const toggleRating = (packageId: string) => {
+    if (!packages.find(p => p.metadata.ID === packageId)?.rating) {
+      // If no rating exists, fetch it
+      fetchPackageRating(packageId);
+    } else {
+      // If rating exists, toggle its visibility
+      setShowRatings(prev => ({
+        ...prev,
+        [packageId]: !prev[packageId]
+      }));
+    }
+  };
+
+  const renderRating = (pkg: PackageData) => {
+    const rating = pkg.rating;
+    
+    if (loadingRatings[pkg.metadata.ID]) {
+      return (
+        <div className="flex items-center space-x-2">
+          <RefreshCw className="animate-spin h-4 w-4" />
+          <span>Loading rating...</span>
+        </div>
+      );
+    }
+
+    if (!rating) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center space-x-2"
+          onClick={() => fetchPackageRating(pkg.metadata.ID)}
+        >
+          <Star className="h-4 w-4" />
+          <span>Get Rating</span>
+        </Button>
+      );
+    }
+
+    return (
+      <div className="space-y-2 border-b pb-4">
+        <div className="flex items-center justify-between">
+          <span className="font-medium">Net Score:</span>
+          <div className="flex items-center">
+            <Star className={`h-4 w-4 ${rating.NetScore >= 0.5 ? 'text-yellow-400' : 'text-gray-300'}`} />
+            <span className="ml-1">{(rating.NetScore * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+        <div className="text-sm space-y-1">
+          <div className="flex justify-between">
+            <span>Bus Factor:</span>
+            <span>{(rating.BusFactor * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Correctness:</span>
+            <span>{(rating.Correctness * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Ramp Up:</span>
+            <span>{(rating.RampUp * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Responsive Maintainer:</span>
+            <span>{(rating.ResponsiveMaintainer * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span>License Score:</span>
+            <span>{(rating.LicenseScore * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Good Pinning Practice:</span>
+            <span>{(rating.GoodPinningPractice * 100).toFixed(1)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Pull Request:</span>
+            <span>{(rating.PullRequest * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const ErrorDisplay = ({ message }: { message: string }) => (
     <Alert variant="destructive" className="border-red-500 bg-red-50">
       <AlertDescription className="text-red-600 font-medium">
@@ -395,287 +590,448 @@ const PackageRegistry: React.FC = () => {
   );
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl space-y-6">
-      <Card>
-        <CardHeader className="border-b pb-3">
-          <CardTitle className="text-2xl font-bold">Package Registry Interface</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="flex gap-3">
-            <Input 
-              placeholder="Search packages with regex..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-              className="flex-1"
-            />
-            <Button onClick={handleSearch} disabled={loading}>
-              Search
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <main className="container mx-auto p-4 min-h-screen">
+      <div className="space-y-4">
+        {error && (
+          <Alert variant="destructive" className="border-red-500 bg-red-50">
+            <AlertDescription className="text-red-600 font-medium">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert className="border-green-500 bg-green-50">
+            <AlertDescription className="text-green-600 font-medium">
+              {successMessage}
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-1">
-          <TabsTrigger value="upload">Package Management</TabsTrigger>
-        </TabsList>
+        <div className="flex gap-3">
+          <Input 
+            placeholder="Search packages with regex..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+            className="flex-1"
+          />
+          <Button 
+            onClick={handleSearch} 
+            disabled={loading}
+          >
+            Search
+          </Button>
+        </div>
 
-        <TabsContent value="upload">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Primary actions - dark background */}
-                <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="default" className="w-full bg-slate-900 hover:bg-slate-800">
-                      <Upload className="w-4 h-4 mr-2" />
-                      Upload Package
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Upload New Package</DialogTitle>
-                      <DialogDescription>
-                        Upload a new package by providing either a URL or a zip file.
-                      </DialogDescription>
-                    </DialogHeader>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full grid grid-cols-1">
+            <TabsTrigger value="upload">Package Management</TabsTrigger>
+          </TabsList>
 
-                    <form onSubmit={handleUploadSubmit} className="space-y-6">
-                      <div className="space-y-2">
-                        <Label>Upload Type</Label>
-                        <div className="flex space-x-4">
-                          <label className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              name="uploadType"
-                              value="url"
-                              checked={uploadFormData.uploadType === 'url'}
-                              onChange={(e) => setUploadFormData(prev => ({
-                                ...prev,
-                                uploadType: e.target.value as 'url' | 'file'
-                              }))}
+          <TabsContent value="upload">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        variant="default" 
+                        className="w-full bg-slate-900 hover:bg-slate-800"
+                        aria-label="Upload new package"
+                      >
+                        <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
+                        Upload Package
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Upload New Package</DialogTitle>
+                        <DialogDescription>
+                          Upload a new package by providing either a URL or a zip file.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <form onSubmit={handleUploadSubmit} className="space-y-6">
+                        <div className="space-y-2" role="radiogroup">
+                          <Label id="upload-type-label">Upload Type</Label>
+                          <div className="flex space-x-4">
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                name="uploadType"
+                                value="url"
+                                checked={uploadFormData.uploadType === 'url'}
+                                onChange={(e) => setUploadFormData(prev => ({
+                                  ...prev,
+                                  uploadType: e.target.value as 'url' | 'file'
+                                }))}
+                              />
+                              <span>URL</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                name="uploadType"
+                                value="file"
+                                checked={uploadFormData.uploadType === 'file'}
+                                onChange={(e) => setUploadFormData(prev => ({
+                                  ...prev,
+                                  uploadType: e.target.value as 'url' | 'file'
+                                }))}
+                              />
+                              <span>File</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {uploadFormData.uploadType === 'url' ? (
+                          <div className="space-y-2">
+                            <Label htmlFor="url">Package URL</Label>
+                            <Input
+                              id="url"
+                              value={uploadFormData.url}
+                              onChange={(e) => setUploadFormData(prev => ({ ...prev, url: e.target.value }))}
+                              placeholder="https://github.com/owner/repo or https://www.npmjs.com/package/name"
                             />
-                            <span>URL</span>
-                          </label>
-                          <label className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              name="uploadType"
-                              value="file"
-                              checked={uploadFormData.uploadType === 'file'}
-                              onChange={(e) => setUploadFormData(prev => ({
-                                ...prev,
-                                uploadType: e.target.value as 'url' | 'file'
-                              }))}
+                            <p className="text-sm text-gray-500">
+                              Enter a valid GitHub repository URL or npm package URL
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Label htmlFor="file">Package File</Label>
+                            <Input
+                              id="file"
+                              type="file"
+                              accept=".zip"
+                              onChange={handleFileChange}
                             />
-                            <span>File</span>
-                          </label>
-                        </div>
-                      </div>
+                            <p className="text-sm text-gray-500">
+                              Upload a zip file (max 50MB)
+                            </p>
+                          </div>
+                        )}
 
-                      {uploadFormData.uploadType === 'url' ? (
                         <div className="space-y-2">
-                          <Label htmlFor="url">Package URL</Label>
-                          <Input
-                            id="url"
-                            value={uploadFormData.url}
-                            onChange={(e) => setUploadFormData(prev => ({ ...prev, url: e.target.value }))}
-                            placeholder="https://github.com/owner/repo or https://www.npmjs.com/package/name"
+                          <Label htmlFor="JSProgram">JS Program</Label>
+                          <textarea
+                            id="JSProgram"
+                            className="w-full min-h-[100px] p-2 border rounded-md"
+                            value={uploadFormData.JSProgram}
+                            onChange={(e) => setUploadFormData(prev => ({ ...prev, JSProgram: e.target.value }))}
+                            placeholder="Enter your JS Program here (optional)"
                           />
-                          <p className="text-sm text-gray-500">
-                            Enter a valid GitHub repository URL or npm package URL
-                          </p>
                         </div>
-                      ) : (
+
                         <div className="space-y-2">
-                          <Label htmlFor="file">Package File</Label>
-                          <Input
-                            id="file"
-                            type="file"
-                            accept=".zip"
-                            onChange={handleFileChange}
-                          />
-                          <p className="text-sm text-gray-500">
-                            Upload a zip file (max 50MB)
-                          </p>
+                          <Label>Package Options</Label>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="debloat"
+                              checked={uploadFormData.debloat}
+                              onChange={(e) => setUploadFormData(prev => ({ ...prev, debloat: e.target.checked }))}
+                            />
+                            <label htmlFor="debloat" className="text-sm">
+                              Enable package debloat (removes unnecessary content)
+                            </label>
+                          </div>
                         </div>
-                      )}
 
-                      <div className="space-y-2">
-                        <Label htmlFor="JSProgram">JS Program</Label>
-                        <textarea
-                          id="JSProgram"
-                          className="w-full min-h-[100px] p-2 border rounded-md"
-                          value={uploadFormData.JSProgram}
-                          onChange={(e) => setUploadFormData(prev => ({ ...prev, JSProgram: e.target.value }))}
-                          placeholder="Enter your JS Program here (optional)"
-                        />
-                      </div>
+                        {uploadStatus && (
+                          <Alert variant={uploadStatus.success ? "default" : "destructive"} 
+                                className={`${uploadStatus.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}>
+                            <AlertDescription className={`${uploadStatus.success ? 'text-green-600' : 'text-red-600'} font-medium`}>
+                              {uploadStatus.message}
+                            </AlertDescription>
+                          </Alert>
+                        )}
 
-                      <div className="space-y-2">
-                        <Label>Package Options</Label>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="debloat"
-                            checked={uploadFormData.debloat}
-                            onChange={(e) => setUploadFormData(prev => ({ ...prev, debloat: e.target.checked }))}
-                          />
-                          <label htmlFor="debloat" className="text-sm">
-                            Enable package debloat (removes unnecessary content)
-                          </label>
+                        <div className="flex justify-end space-x-2">
+                          <Button type="button" variant="outline" onClick={() => setUploadDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={loading}>
+                            {loading ? 'Uploading...' : 'Upload'}
+                          </Button>
                         </div>
-                      </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
 
-                      {uploadStatus && (
-                        <Alert variant={uploadStatus.success ? "default" : "destructive"} 
-                              className={`${uploadStatus.success ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}>
-                          <AlertDescription className={`${uploadStatus.success ? 'text-green-600' : 'text-red-600'} font-medium`}>
-                            {uploadStatus.message}
-                          </AlertDescription>
-                        </Alert>
-                      )}
+                  <Button 
+                    variant="outline" 
+                    className="w-full bg-red-600 hover:bg-red-700 border-red-600 hover:border-red-700 text-white"
+                    onClick={async () => {
+                      try {
+                        setLoading(true);
+                        const response = await fetch('http://localhost:3000/reset', {
+                          method: 'DELETE',
+                          headers: {
+                            ...getAuthHeaders(),
+                            'Content-Type': 'application/json'
+                          }
+                        });
 
-                      <div className="flex justify-end space-x-2">
-                        <Button type="button" variant="outline" onClick={() => setUploadDialogOpen(false)}>
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                          {loading ? 'Uploading...' : 'Upload'}
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Secondary actions - light gray background */}
-                <Button variant="secondary" className="w-full">
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Update Package
-                </Button>
-
-                {/* Optional actions - outline style */}
-                <Button variant="outline" className="w-full">
-                  <HardDrive className="w-4 h-4 mr-2" />
-                  Check Package Size
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={async () => {
-                    try {
-                      setLoading(true);
-                      const response = await fetch('http://localhost:3000/reset', {
-                        method: 'DELETE',
-                        headers: {
-                          ...getAuthHeaders(),
-                          'Content-Type': 'application/json'
+                        if (!response.ok) {
+                          const errorData = await response.json();
+                          throw new Error(errorData.error || 'Failed to reset registry');
                         }
-                      });
 
-                      if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to reset registry');
+                        setError(null);
+                        setSuccessMessage('Reset was successful');
+                        // Refresh the package list after reset
+                        await fetchPackages();
+                      } catch (err) {
+                        setSuccessMessage(null);
+                        setError(err instanceof Error ? err.message : 'An error occurred while resetting the registry');
+                      } finally {
+                        setLoading(false);
+                        // Clear success message after 5 seconds
+                        setTimeout(() => setSuccessMessage(null), 5000);
                       }
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    {loading ? 'Resetting...' : 'Reset Registry'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-                      setError(null);
-                      setSuccessMessage('Reset was successful');
-                      // Refresh the package list after reset
-                      await fetchPackages();
-                    } catch (err) {
-                      setSuccessMessage(null);
-                      setError(err instanceof Error ? err.message : 'An error occurred while resetting the registry');
-                    } finally {
-                      setLoading(false);
-                      // Clear success message after 5 seconds
-                      setTimeout(() => setSuccessMessage(null), 5000);
-                    }
-                  }}
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  {loading ? 'Resetting...' : 'Reset Registry'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 gap-4">
+                  <Button 
+                    variant="default" 
+                    className="w-full bg-slate-900 hover:bg-slate-800"
+                    onClick={fetchPackages}
+                    disabled={loading}
+                  >
+                    <Package className="w-4 h-4 mr-2" />
+                    {loading ? 'Loading...' : 'Browse Package Directory'}
+                  </Button>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 gap-4">
-                <Button 
-                  variant="default" 
-                  className="w-full bg-slate-900 hover:bg-slate-800"
-                  onClick={fetchPackages}
-                  disabled={loading}
-                >
-                  <Package className="w-4 h-4 mr-2" />
-                  {loading ? 'Loading...' : 'Browse Package Directory'}
-                </Button>
-
-                {packages.map((pkg) => (
-                  <Card key={pkg.metadata.ID} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="text-lg font-semibold">{pkg.metadata.Name}</h3>
-                          <p className="text-sm text-gray-500">Version: {pkg.metadata.Version}</p>
+                  <div className="space-y-4" role="list" aria-label="Package list">
+                    {packages.map((pkg) => (
+                      <div
+                        key={pkg.metadata.ID}
+                        className="bg-white p-6 rounded-lg shadow-md"
+                        role="listitem"
+                        aria-label={`Package: ${pkg.metadata.Name}`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-lg font-semibold" tabIndex={0}>
+                              {pkg.metadata.Name}
+                            </h3>
+                            <p className="text-gray-600" tabIndex={0} aria-label="Package version">
+                              Version: {pkg.metadata.Version}
+                            </p>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownload(pkg.metadata.ID)}
+                              disabled={loadingPackages[pkg.metadata.ID]}
+                              aria-label={`Download ${pkg.metadata.Name}`}
+                            >
+                              <Download className="h-4 w-4 mr-1" aria-hidden="true" />
+                              {loadingPackages[pkg.metadata.ID] ? 'Downloading...' : 'Download'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCheckPackageCost(pkg.metadata.ID)}
+                              disabled={loadingPackages[pkg.metadata.ID]}
+                              aria-label={`Check cost for ${pkg.metadata.Name}`}
+                            >
+                              Check Package Cost
+                            </Button>
+                            {loadingRatings[pkg.metadata.ID] ? (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                disabled
+                              >
+                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                Loading Rating...
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleRating(pkg.metadata.ID)}
+                              >
+                                <Star className={`h-4 w-4 mr-1 ${pkg.rating && showRatings[pkg.metadata.ID] ? 'text-yellow-400' : ''}`} />
+                                {!pkg.rating || !showRatings[pkg.metadata.ID] ? 'Get Rating' : 'Hide Rating'}
+                              </Button>
+                            )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleUpdatePackage(pkg.metadata.ID)}
+                              disabled={loadingPackages[pkg.metadata.ID]}
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              {loadingPackages[pkg.metadata.ID] ? 'Updating...' : 'Update'}
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDownload(pkg.metadata.ID)}
-                            disabled={loadingPackages[pkg.metadata.ID]}
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            {loadingPackages[pkg.metadata.ID] ? 'Downloading...' : 'Download'}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleCheckPackageCost(pkg.metadata.ID)}
-                            disabled={loadingPackages[pkg.metadata.ID]}
-                          >
-                            Check Package Cost
-                          </Button>
+                        <div className="space-y-4">
+                          {pkg.rating && showRatings[pkg.metadata.ID] && (
+                            <div className="space-y-2 border-b pb-4">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium">Net Score:</span>
+                                <div className="flex items-center">
+                                  <Star className={`h-4 w-4 ${pkg.rating.NetScore >= 0.5 ? 'text-yellow-400' : 'text-gray-300'}`} />
+                                  <span className="ml-1">{(pkg.rating.NetScore * 100).toFixed(1)}%</span>
+                                </div>
+                              </div>
+                              <div className="text-sm space-y-1">
+                                {Object.entries(pkg.rating).map(([key, value]) => (
+                                  key !== 'NetScore' && (
+                                    <div className="flex justify-between" key={key}>
+                                      <span>{key}:</span>
+                                      <span>{(value * 100).toFixed(1)}%</span>
+                                    </div>
+                                  )
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {packageCosts[pkg.metadata.ID] && (
+                            <div 
+                              className="text-sm text-gray-800 mt-2 p-2 bg-gray-50 rounded-md" 
+                              role="region" 
+                              aria-label="Package cost information"
+                              tabIndex={0}
+                            >
+                              <div>Standalone Cost: ${packageCosts[pkg.metadata.ID]?.standaloneCost.toFixed(2)} MB</div>
+                              <div>Total Cost: ${packageCosts[pkg.metadata.ID]?.totalCost.toFixed(2)} MB</div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <Card>
+          <CardContent className="pt-6">
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+            {successMessage && (
+              <Alert className="mb-4 border-green-500 bg-green-50">
+                <AlertDescription className="text-green-600">
+                  {successMessage}
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+
+        <Alert>
+          <AlertDescription>
+            This interface connects to REST API endpoints for package management operations.
+            Each action is validated and processed according to the specified requirements.
+          </AlertDescription>
+        </Alert>
+
+        {/* Update Dialog */}
+        <Dialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Update Package</DialogTitle>
+              <DialogDescription>
+                Update the package by providing either a new URL or content.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleUpdateSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label>Update Type</Label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="updateType"
+                      value="url"
+                      checked={updateFormData.updateType === 'url'}
+                      onChange={(e) => setUpdateFormData(prev => ({
+                        ...prev,
+                        updateType: e.target.value as 'url' | 'content'
+                      }))}
+                    />
+                    <span>URL</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="updateType"
+                      value="content"
+                      checked={updateFormData.updateType === 'content'}
+                      onChange={(e) => setUpdateFormData(prev => ({
+                        ...prev,
+                        updateType: e.target.value as 'url' | 'content'
+                      }))}
+                    />
+                    <span>Content</span>
+                  </label>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
 
-      <Card>
-        <CardContent className="pt-6">
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          {successMessage && (
-            <Alert variant="default" className="mb-4 border-green-500 bg-green-50">
-              <AlertDescription className="text-green-600">{successMessage}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+              {updateFormData.updateType === 'url' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="url">Package URL</Label>
+                  <Input
+                    id="url"
+                    value={updateFormData.url}
+                    onChange={(e) => setUpdateFormData(prev => ({ ...prev, url: e.target.value }))}
+                    placeholder="https://github.com/owner/repo or https://www.npmjs.com/package/name"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="content">Package Content (Base64)</Label>
+                  <textarea
+                    id="content"
+                    className="w-full min-h-[100px] p-2 border rounded-md"
+                    value={updateFormData.content}
+                    onChange={(e) => setUpdateFormData(prev => ({ ...prev, content: e.target.value }))}
+                    placeholder="Enter base64 encoded package content"
+                  />
+                </div>
+              )}
 
-      <Alert>
-        <AlertDescription>
-          This interface connects to REST API endpoints for package management operations.
-          Each action is validated and processed according to the specified requirements.
-        </AlertDescription>
-      </Alert>
-    </div>
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setUpdateDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Updating...' : 'Update Package'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </main>
   );
 };
 
