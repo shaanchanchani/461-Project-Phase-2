@@ -55,18 +55,19 @@ const PackageRegistry: React.FC = () => {
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [hasBrowsed, setHasBrowsed] = useState(false);
   const [activeTab, setActiveTab] = useState('upload');
+  const [loadingPackages, setLoadingPackages] = useState<{ [key: string]: boolean }>({});
 
   const fetchPackages = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:3000/packages', {
+      const response = await fetch('http://localhost:3000/package/byRegEx', {
         method: 'POST',
         headers: {
           ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify([{ Name: "*" }])  // Query to get all packages
+        body: JSON.stringify({ RegEx: ".*" })  // Using regex to match all packages
       });
 
       if (!response.ok) {
@@ -90,11 +91,11 @@ const PackageRegistry: React.FC = () => {
         }
       }));
       setPackages(transformedData);
-      setHasBrowsed(true); // Set hasBrowsed after successfully getting packages
-      setError(null);
+      setHasBrowsed(true);
+      setActiveTab('upload'); // Switch to upload tab after browsing
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while fetching packages');
-      setPackages([]);
+      setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -283,7 +284,7 @@ const PackageRegistry: React.FC = () => {
 
   const handleDownload = async (packageId: string) => {
     try {
-      setLoading(true);
+      setLoadingPackages(prev => ({ ...prev, [packageId]: true })); // Set specific package loading to true
       const response = await fetch(`http://localhost:3000/package/${packageId}/download`, {
         method: 'GET',
         headers: {
@@ -309,6 +310,32 @@ const PackageRegistry: React.FC = () => {
       setSuccessMessage('Package downloaded successfully');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while downloading the package');
+    } finally {
+      setLoadingPackages(prev => ({ ...prev, [packageId]: false })); // Reset specific package loading to false
+      setTimeout(() => setSuccessMessage(null), 5000);
+    }
+  };
+
+  const handleCheckPackageCost = async (packageId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://localhost:3000/package/${packageId}/cost`, {
+        method: 'GET',
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch package cost');
+      }
+
+      const costData = await response.json();
+      setSuccessMessage(`Package cost: $${costData.cost}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred while fetching package cost');
     } finally {
       setLoading(false);
       setTimeout(() => setSuccessMessage(null), 5000);
@@ -350,7 +377,7 @@ const PackageRegistry: React.FC = () => {
       }));
       setPackages(transformedData);
       setHasBrowsed(true);
-      setActiveTab('query'); // Switch to query tab after search
+      setActiveTab('upload'); // Switch to upload tab after search
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while searching packages');
       setPackages([]);
@@ -394,9 +421,8 @@ const PackageRegistry: React.FC = () => {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-2">
+        <TabsList className="w-full grid grid-cols-1">
           <TabsTrigger value="upload">Package Management</TabsTrigger>
-          <TabsTrigger value="query">Package Query</TabsTrigger>
         </TabsList>
 
         <TabsContent value="upload">
@@ -529,18 +555,14 @@ const PackageRegistry: React.FC = () => {
 
                 {/* Secondary actions - light gray background */}
                 <Button variant="secondary" className="w-full">
-                  <Star className="w-4 h-4 mr-2" />
-                  Check Rating
-                </Button>
-                <Button variant="secondary" className="w-full">
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Update Package
                 </Button>
 
                 {/* Optional actions - outline style */}
                 <Button variant="outline" className="w-full">
-                  <Package className="w-4 h-4 mr-2" />
-                  Ingest NPM Package
+                  <HardDrive className="w-4 h-4 mr-2" />
+                  Check Package Size
                 </Button>
                 <Button 
                   variant="outline" 
@@ -578,16 +600,10 @@ const PackageRegistry: React.FC = () => {
                   <RotateCcw className="w-4 h-4 mr-2" />
                   {loading ? 'Resetting...' : 'Reset Registry'}
                 </Button>
-                <Button variant="outline" className="w-full">
-                  <HardDrive className="w-4 h-4 mr-2" />
-                  Check Package Size
-                </Button>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="query">
           <Card>
             <CardContent className="pt-6">
               <div className="grid grid-cols-1 gap-4">
@@ -600,56 +616,39 @@ const PackageRegistry: React.FC = () => {
                   <Package className="w-4 h-4 mr-2" />
                   {loading ? 'Loading...' : 'Browse Package Directory'}
                 </Button>
-                <Button variant="default" className="w-full bg-slate-900 hover:bg-slate-800">
-                  <Search className="w-4 h-4 mr-2" />
-                  Fetch Available Versions
-                </Button>
-                <Button variant="default" className="w-full bg-slate-900 hover:bg-slate-800">
-                  <HardDrive className="w-4 h-4 mr-2" />
-                  Check Dependency Sizes
-                </Button>
-              </div>
 
-              {/* Package list or empty state message */}
-              {hasBrowsed && (
-                packages.length > 0 ? (
-                  <div className="mt-8">
-                    <h3 className="text-lg font-semibold mb-4">Available Packages</h3>
-                    <div className="grid gap-4">
-                      {packages.map((pkg) => (
-                        <Card key={pkg.metadata.ID} className="p-4">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <h3 className="text-lg font-semibold">{pkg.metadata.Name}</h3>
-                              <p className="text-sm text-gray-500">Version: {pkg.metadata.Version}</p>
-                              <p className="text-sm text-gray-500">ID: {pkg.metadata.ID}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDownload(pkg.metadata.ID)}
-                                disabled={loading}
-                              >
-                                <Download className="w-4 h-4 mr-2" />
-                                {loading ? 'Downloading...' : 'Download'}
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-8 text-center p-8 border rounded-lg bg-gray-50">
-                    <Package className="w-12 h-12 mx-auto text-gray-400 mb-3" />
-                    <h3 className="text-lg font-semibold text-gray-600 mb-2">No Packages Found</h3>
-                    <p className="text-gray-500">
-                      The package directory is empty. Please upload a package in the Package Management tab first.
-                    </p>
-                  </div>
-                )
-              )}
+                {packages.map((pkg) => (
+                  <Card key={pkg.metadata.ID} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-lg font-semibold">{pkg.metadata.Name}</h3>
+                          <p className="text-sm text-gray-500">Version: {pkg.metadata.Version}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownload(pkg.metadata.ID)}
+                            disabled={loadingPackages[pkg.metadata.ID]}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            {loadingPackages[pkg.metadata.ID] ? 'Downloading...' : 'Download'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCheckPackageCost(pkg.metadata.ID)}
+                            disabled={loadingPackages[pkg.metadata.ID]}
+                          >
+                            Check Package Cost
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
