@@ -117,10 +117,10 @@ The system uses GitHub Actions for CI/CD, automatically deploying to AWS EC2 whe
 MIT
 
 ## Team
-Shaan Chanchani
-Alex Pienkowski
-Niki Vakil
-Aryana Lynch
+- Shaan Chanchani
+- Alex Pienkowski
+- Niki Vakil
+- Aryana Lynch
 
 ## Project Status
 
